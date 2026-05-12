@@ -6,14 +6,21 @@ import sqlite3
 # CONFIG
 # =========================================================
 st.set_page_config(page_title="KYK Intelligence System", layout="wide")
+
 st.title("🏆 KYK Intelligence System")
 
 # =========================================================
 # LOGIN
 # =========================================================
 USERS = {
-    "admin": {"password": "Kakashisensei90", "role": "admin"},
-    "Membre": {"password": "SubaeleagueAR", "role": "viewer"}
+    "admin": {
+        "password": "Kakashisensei90",
+        "role": "admin"
+    },
+    "Membre": {
+        "password": "SubaeleagueAR",
+        "role": "viewer"
+    }
 }
 
 if "auth" not in st.session_state:
@@ -21,12 +28,19 @@ if "auth" not in st.session_state:
     st.session_state.role = None
 
 user = st.sidebar.text_input("User")
-pwd = st.sidebar.text_input("Password", type="password")
+
+pwd = st.sidebar.text_input(
+    "Password",
+    type="password"
+)
 
 if st.sidebar.button("Login"):
+
     if user in USERS and USERS[user]["password"] == pwd:
+
         st.session_state.auth = True
         st.session_state.role = USERS[user]["role"]
+
     else:
         st.error("Erreur login")
 
@@ -38,7 +52,11 @@ is_admin = st.session_state.role == "admin"
 # =========================================================
 # DB
 # =========================================================
-conn = sqlite3.connect("subae.db", check_same_thread=False)
+conn = sqlite3.connect(
+    "subae.db",
+    check_same_thread=False
+)
+
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -64,7 +82,10 @@ conn.commit()
 # =========================================================
 # LOAD DATA
 # =========================================================
-df = pd.read_sql_query("SELECT * FROM resultats", conn)
+df = pd.read_sql_query(
+    "SELECT * FROM resultats",
+    conn
+)
 
 # =========================================================
 # KYK LIST
@@ -89,13 +110,17 @@ numeric_cols = [
 if not df.empty:
 
     for c in numeric_cols:
+
         if c not in df.columns:
             df[c] = 0
 
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+        df[c] = pd.to_numeric(
+            df[c],
+            errors="coerce"
+        ).fillna(0)
 
     # =====================================================
-    # CALCUL DES POINTS
+    # CALCUL POINTS
     # =====================================================
     df["points"] = (
         df["field"] * 1 +
@@ -115,25 +140,34 @@ else:
 # =========================================================
 # NAVIGATION
 # =========================================================
-page = st.sidebar.radio("Menu", [
-    "📊 Dashboard",
-    "🧠 KYK Analyzer",
-    "🚨 Alertes",
-    "🩺 Santé KYK",
-    "📈 Funnel",
-    "🎯 Objectifs",
-    "📅 Historique",
-    "⚔️ Comparaison",
-    "📂 Données",
-    "⚙️ Admin"
-])
+page = st.sidebar.radio(
+    "Menu",
+    [
+        "📊 Dashboard",
+        "🧠 KYK Analyzer",
+        "🚨 Alertes",
+        "🩺 Santé KYK",
+        "📈 Funnel",
+        "🎯 Objectifs",
+        "📅 Historique",
+        "⚔️ Comparaison",
+        "📂 Données",
+        "⚙️ Admin"
+    ]
+)
 
 # =========================================================
-# BASE RANKING
+# RANKING GLOBAL
 # =========================================================
-base = pd.DataFrame({"kuyok": all_kyk})
+base = pd.DataFrame({
+    "kuyok": all_kyk
+})
 
-ranking = df.groupby("kuyok")["points"].sum().reset_index()
+ranking = (
+    df.groupby("kuyok")["points"]
+    .sum()
+    .reset_index()
+)
 
 ranking = base.merge(
     ranking,
@@ -153,36 +187,54 @@ if page == "📊 Dashboard":
 
     st.header("📊 Vue globale")
 
-    st.bar_chart(ranking.set_index("kuyok"))
+    st.bar_chart(
+        ranking.set_index("kuyok")
+    )
 
-    st.dataframe(ranking, use_container_width=True)
+    st.dataframe(
+        ranking,
+        use_container_width=True
+    )
 
 # =========================================================
 # 🧠 KYK ANALYZER
 # =========================================================
 elif page == "🧠 KYK Analyzer":
 
-    k = st.selectbox("KYK", all_kyk)
+    k = st.selectbox(
+        "KYK",
+        all_kyk
+    )
 
     sub = df[df["kuyok"] == k]
 
     st.subheader(k)
 
     if sub.empty:
+
         st.info("Aucune donnée")
+
     else:
 
         total_points = sub["points"].sum()
 
-        st.metric("Total Points", int(total_points))
+        st.metric(
+            "Total Points",
+            int(total_points)
+        )
 
         st.write("### Activités cumulées")
 
-        st.write(sub[numeric_cols].sum())
+        st.write(
+            sub[numeric_cols].sum()
+        )
 
         st.write("### Historique")
 
-        st.dataframe(sub, use_container_width=True)
+        st.dataframe(
+            sub,
+            use_container_width=True
+        )
 
 # =========================================================
 # 🚨 ALERTES
@@ -199,21 +251,41 @@ elif page == "🚨 Alertes":
 
         if sub.empty:
 
-            alerts.append((k, "😴 Aucun activité"))
+            alerts.append((
+                k,
+                "😴 Aucun activité"
+            ))
 
         elif sub["taggui"].sum() < 3:
 
-            alerts.append((k, "⚠️ Faible consolidation"))
+            alerts.append((
+                k,
+                "⚠️ Faible consolidation"
+            ))
 
-        elif sub["field"].sum() > 20 and sub["taggui"].sum() < 5:
+        elif (
+            sub["field"].sum() > 20 and
+            sub["taggui"].sum() < 5
+        ):
 
-            alerts.append((k, "⚠️ Inefficacité field"))
+            alerts.append((
+                k,
+                "⚠️ Inefficacité field"
+            ))
 
         else:
 
-            alerts.append((k, "🟢 OK"))
+            alerts.append((
+                k,
+                "🟢 OK"
+            ))
 
-    st.table(pd.DataFrame(alerts, columns=["KYK", "Status"]))
+    st.table(
+        pd.DataFrame(
+            alerts,
+            columns=["KYK", "Status"]
+        )
+    )
 
 # =========================================================
 # 🩺 SANTÉ KYK
@@ -231,23 +303,37 @@ elif page == "🩺 Santé KYK":
         total = sub["points"].sum()
 
         if sub.empty:
+
             state = "🔴 Inactif"
 
         elif total >= 500:
+
             state = "🟢 Excellent"
 
         elif total >= 200:
+
             state = "🟠 Moyen"
 
         else:
+
             state = "🔴 Faible"
 
-        health.append((k, state, int(total)))
+        health.append((
+            k,
+            state,
+            int(total)
+        ))
 
-    st.table(pd.DataFrame(
-        health,
-        columns=["KYK", "Etat", "Points"]
-    ))
+    st.table(
+        pd.DataFrame(
+            health,
+            columns=[
+                "KYK",
+                "Etat",
+                "Points"
+            ]
+        )
+    )
 
 # =========================================================
 # 📈 FUNNEL
@@ -273,7 +359,10 @@ elif page == "📈 Funnel":
         columns=["Étape", "Total"]
     )
 
-    st.dataframe(funnel_df, use_container_width=True)
+    st.dataframe(
+        funnel_df,
+        use_container_width=True
+    )
 
     st.bar_chart(
         funnel_df.set_index("Étape")
@@ -286,16 +375,23 @@ elif page == "🎯 Objectifs":
 
     st.subheader("Objectifs KYK")
 
-    st.info("Module KPI évolutif à développer")
+    st.info(
+        "Module KPI évolutif à développer"
+    )
 
 # =========================================================
 # 📅 HISTORIQUE
 # =========================================================
 elif page == "📅 Historique":
 
-    st.subheader("Historique des performances")
+    st.subheader(
+        "Historique des performances"
+    )
 
-    history = df.groupby("semaine")["points"].sum()
+    history = (
+        df.groupby("semaine")["points"]
+        .sum()
+    )
 
     st.line_chart(history)
 
@@ -304,14 +400,24 @@ elif page == "📅 Historique":
 # =========================================================
 elif page == "⚔️ Comparaison":
 
-    a = st.selectbox("KYK A", all_kyk)
-    b = st.selectbox("KYK B", all_kyk)
+    a = st.selectbox(
+        "KYK A",
+        all_kyk
+    )
+
+    b = st.selectbox(
+        "KYK B",
+        all_kyk
+    )
 
     compare = ranking[
         ranking["kuyok"].isin([a, b])
     ]
 
-    st.dataframe(compare, use_container_width=True)
+    st.dataframe(
+        compare,
+        use_container_width=True
+    )
 
 # =========================================================
 # 📂 DONNÉES
@@ -320,7 +426,10 @@ elif page == "📂 Données":
 
     st.subheader("Base de données")
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(
+        df,
+        use_container_width=True
+    )
 
 # =========================================================
 # ⚙️ ADMIN
@@ -337,6 +446,9 @@ elif page == "⚙️ Admin":
 
         with st.form("add"):
 
+            # =============================================
+            # INFOS
+            # =============================================
             date = st.date_input("Date")
 
             semaine = st.number_input(
@@ -345,38 +457,135 @@ elif page == "⚙️ Admin":
                 step=1
             )
 
-            k = st.selectbox("KYK", all_kyk)
+            k = st.selectbox(
+                "KYK",
+                all_kyk
+            )
 
             st.markdown("## Activités")
 
-            field = st.checkbox("Passage sur le Field (+1)")
-            fruit = st.checkbox("Fruit Mannam (+5)")
-            autres = st.checkbox("Autres Fruits (+2)")
-            presence = st.checkbox("Mannam Présence (+10)")
-            taggui = st.checkbox("Mannam Taggui (+20)")
-            bb_ind = st.checkbox("BB Individuel (+50)")
-            bb_group = st.checkbox("BB Groupe (+100)")
-            ct = st.checkbox("CT (+200)")
-            ot = st.checkbox("Participation OT (+500)")
-
-            submit = st.form_submit_button("Ajouter")
-
-        if submit:
-
-            # =================================================
-            # CALCUL AUTO DES POINTS
-            # =================================================
-            points = (
-                int(field) * 1 +
-                int(fruit) * 5 +
-                int(autres) * 2 +
-                int(presence) * 10 +
-                int(taggui) * 20 +
-                int(bb_ind) * 50 +
-                int(bb_group) * 100 +
-                int(ct) * 200 +
-                int(ot) * 500
+            # =============================================
+            # INPUTS QUANTITÉS
+            # =============================================
+            field = st.number_input(
+                "Passages sur le Field",
+                min_value=0,
+                step=1
             )
+
+            fruit = st.number_input(
+                "Fruit Mannam",
+                min_value=0,
+                step=1
+            )
+
+            autres = st.number_input(
+                "Autres Fruits (NTF, EM...)",
+                min_value=0,
+                step=1
+            )
+
+            presence = st.number_input(
+                "Mannam Présence",
+                min_value=0,
+                step=1
+            )
+
+            taggui = st.number_input(
+                "Mannam Taggui",
+                min_value=0,
+                step=1
+            )
+
+            bb_ind = st.number_input(
+                "BB Individuel",
+                min_value=0,
+                step=1
+            )
+
+            bb_group = st.number_input(
+                "BB Groupe",
+                min_value=0,
+                step=1
+            )
+
+            ct = st.number_input(
+                "CT",
+                min_value=0,
+                step=1
+            )
+
+            ot = st.number_input(
+                "Participation OT",
+                min_value=0,
+                step=1
+            )
+
+            # =============================================
+            # CALCUL DES POINTS
+            # =============================================
+            points = (
+                field * 1 +
+                fruit * 5 +
+                autres * 2 +
+                presence * 10 +
+                taggui * 20 +
+                bb_ind * 50 +
+                bb_group * 100 +
+                ct * 200 +
+                ot * 500
+            )
+
+            st.markdown("## 🏆 Calcul automatique")
+
+            st.write(
+                f"Field : {field} × 1 = {field * 1}"
+            )
+
+            st.write(
+                f"Fruit Mannam : {fruit} × 5 = {fruit * 5}"
+            )
+
+            st.write(
+                f"Autres Fruits : {autres} × 2 = {autres * 2}"
+            )
+
+            st.write(
+                f"Présence : {presence} × 10 = {presence * 10}"
+            )
+
+            st.write(
+                f"Taggui : {taggui} × 20 = {taggui * 20}"
+            )
+
+            st.write(
+                f"BB Individuel : {bb_ind} × 50 = {bb_ind * 50}"
+            )
+
+            st.write(
+                f"BB Groupe : {bb_group} × 100 = {bb_group * 100}"
+            )
+
+            st.write(
+                f"CT : {ct} × 200 = {ct * 200}"
+            )
+
+            st.write(
+                f"OT : {ot} × 500 = {ot * 500}"
+            )
+
+            st.success(
+                f"🏆 TOTAL POINTS = {points}"
+            )
+
+            submit = st.form_submit_button(
+                "Ajouter"
+            )
+
+        # =================================================
+        # INSERT DB
+        # =================================================
+        if submit:
 
             cursor.execute("""
             INSERT INTO resultats (
@@ -411,6 +620,8 @@ elif page == "⚙️ Admin":
 
             conn.commit()
 
-            st.success(f"✅ Données ajoutées | Total points : {points}")
+            st.success(
+                f"✅ Données ajoutées pour {k} | Points : {points}"
+            )
 
             st.rerun()
