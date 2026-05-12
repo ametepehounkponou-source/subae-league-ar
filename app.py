@@ -6,14 +6,10 @@ st.set_page_config(page_title="Subae League AR")
 st.title("🏆 Subae League AR")
 
 # -----------------------
-# CHARGEMENT
+# CHARGEMENT CSV
 # -----------------------
 matchs = pd.read_csv("matchs.csv")
-
-try:
-    resultats = pd.read_csv("resultats.csv")
-except:
-    resultats = pd.DataFrame()
+resultats = pd.read_csv("resultats.csv")
 
 st.subheader("📅 Journée 1")
 st.dataframe(matchs)
@@ -34,32 +30,44 @@ points_map = {
 }
 
 # -----------------------
+# DEBUG IMPORTANT (voir les données réelles)
+# -----------------------
+st.subheader("🔍 DEBUG - données brutes")
+st.dataframe(resultats)
+
+# -----------------------
+# NETTOYAGE DES COLONNES
+# -----------------------
+for col in points_map.keys():
+    if col in resultats.columns:
+        resultats[col] = pd.to_numeric(resultats[col], errors="coerce").fillna(0)
+    else:
+        resultats[col] = 0  # si colonne manquante → 0
+
+# -----------------------
 # CALCUL POINTS
 # -----------------------
 def calc(row):
     total = 0
     for k, v in points_map.items():
-        total += float(row.get(k, 0)) * v
+        val = float(row.get(k, 0))
+        total += val * v
     return total
 
+resultats["points"] = resultats.apply(calc, axis=1)
+
 # -----------------------
-# CLASSEMENT (MODE PROPRE)
+# CLASSEMENT
 # -----------------------
-if not resultats.empty:
+classement = resultats.groupby("kuyok")["points"].sum().reset_index()
+classement = classement.sort_values("points", ascending=False)
 
-    # conversion sécurité
-    for col in points_map.keys():
-        if col in resultats.columns:
-            resultats[col] = pd.to_numeric(resultats[col], errors="coerce").fillna(0)
+st.subheader("🏆 Classement général")
+st.dataframe(classement)
 
-    # calcul des points par équipe
-    resultats["points"] = resultats.apply(calc, axis=1)
-
-    classement = resultats.groupby("kuyok")["points"].sum().reset_index()
-    classement = classement.sort_values("points", ascending=False)
-
-    st.subheader("🏆 Classement général")
-    st.dataframe(classement)
-
-else:
-    st.warning("Aucun résultat encore")
+# -----------------------
+# DEBUG PAR LIGNE
+# -----------------------
+st.subheader("🧮 DEBUG - calcul ligne par ligne")
+for _, row in resultats.iterrows():
+    st.write(row["kuyok"], "→", row["points"], "points")
