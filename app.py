@@ -43,13 +43,20 @@ points_map = {
 }
 
 # -----------------------
-# SAISIE
+# LISTE KYK (DROPDOWN)
+# -----------------------
+all_kyk = [f"KYK{i}" for i in range(1, 19)]
+
+# -----------------------
+# SAISIE PROPRE
 # -----------------------
 st.subheader("➕ Ajouter résultat")
 
 date = st.text_input("Date")
 semaine = st.number_input("Semaine", step=1)
-kuyok = st.text_input("Kuyok")
+
+# 🔥 DROPDOWN ICI
+kuyok = st.selectbox("Choisir le KYK", all_kyk)
 
 field = st.number_input("Passage sur le field", step=1)
 fruit = st.number_input("Fruit Mannam fixé", step=1)
@@ -91,9 +98,8 @@ def calc(row):
     return total
 
 # -----------------------
-# 🏆 CLASSEMENT TOUJOURS AFFICHÉ
+# CLASSEMENT TOUJOURS VISIBLE
 # -----------------------
-all_kyk = [f"KYK{i}" for i in range(1, 19)]
 base = pd.DataFrame({"kuyok": all_kyk})
 
 if not resultats.empty:
@@ -116,8 +122,5 @@ classement = classement.sort_values("points", ascending=False)
 st.subheader("🏆 Classement général")
 st.dataframe(classement)
 
-# -----------------------
-# DONNÉES
-# -----------------------
 st.subheader("📊 Résultats")
 st.dataframe(resultats)
