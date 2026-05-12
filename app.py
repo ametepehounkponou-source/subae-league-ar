@@ -9,7 +9,7 @@ st.title("🏆 Subae League AR")
 FILE = "resultats.csv"
 
 # -----------------------
-# INITIALISATION CSV
+# LOAD DATA
 # -----------------------
 if os.path.exists(FILE):
     resultats = pd.read_csv(FILE)
@@ -43,11 +43,11 @@ points_map = {
 }
 
 # -----------------------
-# FORMULAIRE AJOUT
+# AJOUT RESULTAT (FORMULAIRE 1)
 # -----------------------
 st.subheader("➕ Ajouter un résultat")
 
-with st.form("add"):
+with st.form("form_add"):
     date = st.text_input("Date")
     semaine = st.number_input("Semaine", step=1)
     kuyok = st.text_input("Kuyok")
@@ -62,67 +62,67 @@ with st.form("add"):
     ct = st.number_input("CT", step=1)
     ot = st.number_input("Participation OT", step=1)
 
-    submit = st.form_submit_button("Ajouter")
+    submit_add = st.form_submit_button("Ajouter")
 
-    if submit:
-        new = {
-            "date": date,
-            "semaine": semaine,
-            "kuyok": kuyok,
-            "Passage sur le field": field,
-            "Fruit Mannam fixé": fruit,
-            "Autres fruits (NTF, EM, etc.)": autres,
-            "Mannam présence": presence,
-            "Mannam Taggui": taggui,
-            "BB individuel": bb_ind,
-            "BB groupe": bb_group,
-            "CT": ct,
-            "Participation OT": ot
-        }
+if submit_add:
+    new = {
+        "date": date,
+        "semaine": semaine,
+        "kuyok": kuyok,
+        "Passage sur le field": field,
+        "Fruit Mannam fixé": fruit,
+        "Autres fruits (NTF, EM, etc.)": autres,
+        "Mannam présence": presence,
+        "Mannam Taggui": taggui,
+        "BB individuel": bb_ind,
+        "BB groupe": bb_group,
+        "CT": ct,
+        "Participation OT": ot
+    }
 
-        resultats = pd.concat([resultats, pd.DataFrame([new])], ignore_index=True)
-        resultats.to_csv(FILE, index=False)
-        st.success("Résultat ajouté ✔️")
+    resultats = pd.concat([resultats, pd.DataFrame([new])], ignore_index=True)
+    resultats.to_csv(FILE, index=False)
+    st.success("Résultat ajouté ✔️")
 
 # -----------------------
-# EDITION D'UN RESULTAT
+# EDIT RESULT (FORMULAIRE 2)
 # -----------------------
 st.subheader("✏️ Modifier un résultat")
 
 if not resultats.empty:
-    index = st.number_input("Index de la ligne à modifier", min_value=0, max_value=len(resultats)-1, step=1)
+    index = st.number_input("Index à modifier", 0, len(resultats)-1, 0)
 
     row = resultats.iloc[index]
 
-    with st.form("edit"):
-        field = st.number_input("Passage sur le field", value=int(row["Passage sur le field"]))
-        fruit = st.number_input("Fruit Mannam fixé", value=int(row["Fruit Mannam fixé"]))
-        autres = st.number_input("Autres fruits", value=int(row["Autres fruits (NTF, EM, etc.)"]))
-        presence = st.number_input("Mannam présence", value=int(row["Mannam présence"]))
-        taggui = st.number_input("Mannam Taggui", value=int(row["Mannam Taggui"]))
-        bb_ind = st.number_input("BB individuel", value=int(row["BB individuel"]))
+    with st.form("form_edit"):
+        field = st.number_input("Field", value=int(row["Passage sur le field"]))
+        fruit = st.number_input("Fruit", value=int(row["Fruit Mannam fixé"]))
+        autres = st.number_input("Autres", value=int(row["Autres fruits (NTF, EM, etc.)"]))
+        presence = st.number_input("Présence", value=int(row["Mannam présence"]))
+        taggui = st.number_input("Taggui", value=int(row["Mannam Taggui"]))
+        bb_ind = st.number_input("BB indiv", value=int(row["BB individuel"]))
         bb_group = st.number_input("BB groupe", value=int(row["BB groupe"]))
         ct = st.number_input("CT", value=int(row["CT"]))
-        ot = st.number_input("Participation OT", value=int(row["Participation OT"]))
+        ot = st.number_input("OT", value=int(row["Participation OT"]))
 
-        save = st.form_submit_button("Modifier")
+        submit_edit = st.form_submit_button("Modifier")
 
-        if save:
-            resultats.at[index, "Passage sur le field"] = field
-            resultats.at[index, "Fruit Mannam fixé"] = fruit
-            resultats.at[index, "Autres fruits (NTF, EM, etc.)"] = autres
-            resultats.at[index, "Mannam présence"] = presence
-            resultats.at[index, "Mannam Taggui"] = taggui
-            resultats.at[index, "BB individuel"] = bb_ind
-            resultats.at[index, "BB groupe"] = bb_group
-            resultats.at[index, "CT"] = ct
-            resultats.at[index, "Participation OT"] = ot
+    if submit_edit:
+        resultats.at[index, "Passage sur le field"] = field
+        resultats.at[index, "Fruit Mannam fixé"] = fruit
+        resultats.at[index, "Autres fruits (NTF, EM, etc.)"] = autres
+        resultats.at[index, "Mannam présence"] = presence
+        resultats.at[index, "Mannam Taggui"] = taggui
+        resultats.at[index, "BB individuel"] = bb_ind
+        resultats.at[index, "BB groupe"] = bb_group
+        resultats.at[index, "CT"] = ct
+        resultats.at[index, "Participation OT"] = ot
 
-            resultats.to_csv(FILE, index=False)
-            st.success("Résultat modifié ✔️")
+        resultats.to_csv(FILE, index=False)
+        st.success("Résultat modifié ✔️")
 
 # -----------------------
-# CALCUL POINTS
+# CALCUL
 # -----------------------
 def calc(row):
     total = 0
@@ -137,7 +137,7 @@ if not resultats.empty:
     resultats["points"] = resultats.apply(calc, axis=1)
 
 # -----------------------
-# CLASSEMENT COMPLET (TOUS KYK MÊME À 0)
+# CLASSEMENT COMPLET
 # -----------------------
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 base = pd.DataFrame({"kuyok": all_kyk})
@@ -154,8 +154,5 @@ classement = classement.sort_values("points", ascending=False)
 st.subheader("🏆 Classement général")
 st.dataframe(classement)
 
-# -----------------------
-# DONNÉES
-# -----------------------
 st.subheader("📊 Résultats")
 st.dataframe(resultats)
