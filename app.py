@@ -6,7 +6,7 @@ import sqlite3
 # CONFIG
 # =========================================================
 st.set_page_config(page_title="Subae League AR", layout="wide")
-st.title("🏆 Subae League AR - Dashboard KYK")
+st.title("🏆 Subae League AR - KYK Intelligence System")
 
 # =========================================================
 # LOGIN
@@ -29,7 +29,7 @@ if st.sidebar.button("Login"):
     if username in USERS and USERS[username]["password"] == password:
         st.session_state.auth = True
         st.session_state.role = USERS[username]["role"]
-        st.success(f"Connecté en tant que {username}")
+        st.success("Connexion réussie")
     else:
         st.error("Identifiants incorrects")
 
@@ -39,7 +39,7 @@ if not st.session_state.auth:
 is_admin = st.session_state.role == "admin"
 
 # =========================================================
-# SQLITE CONNECTION
+# SQLITE
 # =========================================================
 def get_conn():
     return sqlite3.connect("subae.db", check_same_thread=False)
@@ -73,7 +73,12 @@ conn.commit()
 df = pd.read_sql_query("SELECT * FROM resultats", conn)
 
 # =========================================================
-# SAFE EMPTY HANDLING
+# KYK LIST (TOUJOURS COMPLET)
+# =========================================================
+all_kyk = [f"KYK{i}" for i in range(1, 19)]
+
+# =========================================================
+# SAFE INIT
 # =========================================================
 if df.empty:
     df = pd.DataFrame(columns=[
@@ -83,9 +88,9 @@ if df.empty:
     ])
 
 # =========================================================
-# CLEAN + POINTS CALCULATION (GLOBAL FIX)
+# CLEAN + POINTS CALCULATION
 # =========================================================
-if not df.empty and "kuyok" in df.columns:
+if not df.empty:
 
     for col in ["field","fruit","autres","presence","taggui","bb_ind","bb_group","ct","ot"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -105,11 +110,6 @@ else:
     df["points"] = 0
 
 # =========================================================
-# KYK LIST
-# =========================================================
-all_kyk = [f"KYK{i}" for i in range(1, 19)]
-
-# =========================================================
 # NAVIGATION
 # =========================================================
 page = st.sidebar.radio(
@@ -118,15 +118,23 @@ page = st.sidebar.radio(
 )
 
 # =========================================================
-# DASHBOARD
+# 📊 DASHBOARD
 # =========================================================
 if page == "📊 Dashboard":
 
     st.header("📊 Dashboard Global")
 
-    if not df.empty and len(df) > 0:
+    if df.empty:
+        st.warning("Aucune donnée enregistrée.")
+    else:
+
+        # 🔥 FORCER TOUS LES KYK
+        base = pd.DataFrame({"kuyok": all_kyk})
 
         ranking = df.groupby("kuyok")["points"].sum().reset_index()
+
+        ranking = base.merge(ranking, on="kuyok", how="left").fillna(0)
+
         ranking = ranking.sort_values("points", ascending=False)
 
         c1, c2, c3 = st.columns(3)
@@ -135,14 +143,14 @@ if page == "📊 Dashboard":
         c2.metric("📈 Total points", int(ranking["points"].sum()))
         c3.metric("👥 KYK actifs", df["kuyok"].nunique())
 
-        st.subheader("🏆 Classement")
+        st.subheader("🏆 Classement complet")
         st.dataframe(ranking, use_container_width=True)
 
-        st.subheader("📊 Graphique")
+        st.subheader("📊 Performance")
         st.bar_chart(ranking.set_index("kuyok"))
 
 # =========================================================
-# ANALYSE KYK
+# 🧠 ANALYSE KYK
 # =========================================================
 elif page == "🧠 Analyse KYK":
 
@@ -152,18 +160,14 @@ elif page == "🧠 Analyse KYK":
 
     st.subheader(f"🧠 Analyse {kyk}")
 
-    if not sub.empty:
-
+    if sub.empty:
+        st.info("Aucune donnée pour ce KYK")
+    else:
         st.metric("Points", int(sub["points"].sum()))
-
-        st.write("📊 Détail")
         st.write(sub.sum(numeric_only=True))
 
-    else:
-        st.info("Aucune donnée pour ce KYK")
-
 # =========================================================
-# COMPARAISON
+# ⚔️ COMPARAISON
 # =========================================================
 elif page == "⚔️ Comparaison":
 
@@ -173,7 +177,7 @@ elif page == "⚔️ Comparaison":
     s1 = df[df["kuyok"] == k1].sum(numeric_only=True)
     s2 = df[df["kuyok"] == k2].sum(numeric_only=True)
 
-    st.subheader("⚔️ Comparaison KYK")
+    st.subheader("⚔️ Comparaison")
 
     col1, col2 = st.columns(2)
 
@@ -186,7 +190,7 @@ elif page == "⚔️ Comparaison":
         st.write(s2)
 
 # =========================================================
-# DONNÉES
+# 📂 DONNÉES
 # =========================================================
 elif page == "📂 Données":
 
@@ -194,7 +198,7 @@ elif page == "📂 Données":
     st.dataframe(df, use_container_width=True)
 
 # =========================================================
-# ADMIN
+# ⚙️ ADMIN
 # =========================================================
 elif page == "⚙️ Admin":
 
