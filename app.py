@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 # CONFIG
 # =========================================================
 st.set_page_config(page_title="Subae League AR", layout="wide")
-
 st.title("🏆 Subae League AR - Pro Dashboard (SQLite)")
 
 # =========================================================
@@ -41,17 +40,14 @@ if not st.session_state.auth:
 is_admin = st.session_state.role == "admin"
 
 # =========================================================
-# SQLITE CONNECTION
+# SQLITE
 # =========================================================
-def get_conn():
+def conn():
     return sqlite3.connect("subae.db", check_same_thread=False)
 
-conn = get_conn()
-cursor = conn.cursor()
+c = conn()
+cursor = c.cursor()
 
-# =========================================================
-# CREATE TABLE AUTO
-# =========================================================
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS resultats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,61 +66,17 @@ CREATE TABLE IF NOT EXISTS resultats (
 )
 """)
 
-conn.commit()
-
-# =========================================================
-# SETTINGS
-# =========================================================
-all_kyk = [f"KYK{i}" for i in range(1, 19)]
-
-weights = {
-    "field": 1,
-    "fruit": 5,
-    "autres": 2,
-    "presence": 10,
-    "taggui": 20,
-    "bb_ind": 50,
-    "bb_group": 100,
-    "ct": 200,
-    "ot": 500
-}
+c.commit()
 
 # =========================================================
 # LOAD DATA
 # =========================================================
-df = pd.read_sql_query("SELECT * FROM resultats", conn)
+df = pd.read_sql_query("SELECT * FROM resultats", c)
 
 # =========================================================
-# CALCUL POINTS
+# KYK LIST
 # =========================================================
-if not df.empty:
-    for c in weights:
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-
-    df["points"] = sum(df[c] * w for c, w in weights.items())
-else:
-    df["points"] = 0
-
-# =========================================================
-# PRIORITY SCORE
-# =========================================================
-def priority_score(group):
-    return (
-        group["taggui"].sum() * 1000000 +
-        group["presence"].sum() * 10000 +
-        group["fruit"].sum() * 100 +
-        group["field"].sum()
-    )
-
-# =========================================================
-# RANKING
-# =========================================================
-base = pd.DataFrame({"kuyok": all_kyk})
-
-ranking = df.groupby("kuyok")["points"].sum().reset_index()
-
-ranking = base.merge(ranking, on="kuyok", how="left").fillna(0)
-ranking = ranking.sort_values("points", ascending=False)
+all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # =========================================================
 # NAVIGATION
@@ -141,52 +93,30 @@ if page == "📊 Dashboard":
 
     st.header("📊 Dashboard Global")
 
-    c1, c2, c3 = st.columns(3)
+    if not df.empty:
 
-    c1.metric("🏆 Top KYK", ranking.iloc[0]["kuyok"] if not df.empty else "-")
-    c2.metric("📈 Total points", int(ranking["points"].sum()))
-    c3.metric("👥 KYK actifs", len(df["kuyok"].unique()))
+        df["points"] = (
+            df["field"] * 1 +
+            df["fruit"] * 5 +
+            df["autres"] * 2 +
+            df["presence"] * 10 +
+            df["taggui"] * 20 +
+            df["bb_ind"] * 50 +
+            df["bb_group"] * 100 +
+            df["ct"] * 200 +
+            df["ot"] * 500
+        )
 
-    with st.expander("🏆 Classement"):
-        st.dataframe(ranking, use_container_width=True)
+        ranking = df.groupby("kuyok")["points"].sum().reset_index()
+        ranking = ranking.sort_values("points", ascending=False)
 
-    with st.expander("📊 Graph"):
-        st.bar_chart(ranking.set_index("kuyok")["points"])
+        c1, c2, c3 = st.columns(3)
 
-    with st.expander("📈 Evolution"):
-        if not df.empty:
-            evo = df.groupby(["semaine", "kuyok"])["points"].sum().reset_index()
-            pivot = evo.pivot(index="semaine", columns="kuyok", values="points").fillna(0)
-            st.line_chart(pivot)
+        c1.metric("🏆 Top KYK", ranking.iloc[0]["kuyok"])
+        c2.metric("📈 Total points", int(ranking["points"].sum()))
+        c3.metric("👥 KYK actifs", df["kuyok"].nunique())
 
-    # =====================================================
-    # DISTINCTIONS
-    # =====================================================
-    with st.expander("🏅 Distinctions"):
-
-        if not df.empty:
-
-            week = int(df["semaine"].max())
-
-            week_df = df[df["semaine"] == week]
-
-            week_scores = week_df.groupby("kuyok").apply(priority_score).reset_index(name="score")
-
-            best_week = week_scores.sort_values("score", ascending=False).iloc[0]["kuyok"]
-            worst_week = week_scores.sort_values("score", ascending=True).iloc[0]["kuyok"]
-
-            month_df = df[df["date"].str[:7] == df["date"].max()[:7]]
-
-            month_scores = month_df.groupby("kuyok").apply(priority_score).reset_index(name="score")
-
-            best_month = month_scores.sort_values("score", ascending=False).iloc[0]["kuyok"]
-            worst_month = month_scores.sort_values("score", ascending=True).iloc[0]["kuyok"]
-
-            st.success(f"🥇 Semaine : {best_week}")
-            st.success(f"🏆 Mois : {best_month}")
-
-            st.error(f"📉 Semaine : {worst_week}")
-            st.error(f"⚠️ Mois : {worst_month}")
+        st.bar_chart(ranking.set_index("kuyok"))
 
 # =========================================================
 # ANALYSE KYK
@@ -197,13 +127,16 @@ elif page == "🧠 Analyse KYK":
 
     sub = df[df["kuyok"] == kyk]
 
-    stats = {c: sub[c].sum() for c in weights} if not sub.empty else {c: 0 for c in weights}
-
     st.subheader(f"🧠 Analyse {kyk}")
 
-    st.metric("Points", int(sub["points"].sum()) if not sub.empty else 0)
+    if not sub.empty:
 
-    st.write(stats)
+        st.metric("Points", int(sub["field"].sum() +
+                               sub["fruit"].sum()*5 +
+                               sub["presence"].sum()*10 +
+                               sub["taggui"].sum()*20))
+
+        st.write(sub.sum(numeric_only=True))
 
 # =========================================================
 # COMPARAISON
@@ -213,8 +146,8 @@ elif page == "⚔️ Comparaison":
     k1 = st.selectbox("KYK 1", all_kyk)
     k2 = st.selectbox("KYK 2", all_kyk, index=1)
 
-    s1 = df[df["kuyok"] == k1]
-    s2 = df[df["kuyok"] == k2]
+    s1 = df[df["kuyok"] == k1].sum(numeric_only=True)
+    s2 = df[df["kuyok"] == k2].sum(numeric_only=True)
 
     st.subheader("Comparaison")
 
@@ -222,11 +155,11 @@ elif page == "⚔️ Comparaison":
 
     with col1:
         st.write(k1)
-        st.write(s1.sum(numeric_only=True))
+        st.write(s1)
 
     with col2:
         st.write(k2)
-        st.write(s2.sum(numeric_only=True))
+        st.write(s2)
 
 # =========================================================
 # DONNÉES
@@ -242,6 +175,7 @@ elif page == "⚙️ Admin":
 
     if not is_admin:
         st.error("Accès refusé")
+
     else:
 
         st.subheader("➕ Ajouter un résultat")
@@ -249,18 +183,22 @@ elif page == "⚙️ Admin":
         with st.form("add"):
 
             date = st.date_input("Date")
-            semaine = st.number_input("Semaine")
+
+            # ✅ FIX IMPORTANT : integer only
+            semaine = st.number_input("Semaine", step=1, format="%d")
+
             kuyok = st.selectbox("KYK", all_kyk)
 
-            field = st.number_input("Field")
-            fruit = st.number_input("Fruit")
-            autres = st.number_input("Autres")
-            presence = st.number_input("Présence")
-            taggui = st.number_input("Taggui")
-            bb_ind = st.number_input("BB ind")
-            bb_group = st.number_input("BB group")
-            ct = st.number_input("CT")
-            ot = st.number_input("OT")
+            # ✅ tous en ENTIER (pas float)
+            field = st.number_input("Field", step=1, format="%d")
+            fruit = st.number_input("Fruit", step=1, format="%d")
+            autres = st.number_input("Autres", step=1, format="%d")
+            presence = st.number_input("Présence", step=1, format="%d")
+            taggui = st.number_input("Taggui", step=1, format="%d")
+            bb_ind = st.number_input("BB individuel", step=1, format="%d")
+            bb_group = st.number_input("BB groupe", step=1, format="%d")
+            ct = st.number_input("CT", step=1, format="%d")
+            ot = st.number_input("OT", step=1, format="%d")
 
             submit = st.form_submit_button("Ajouter")
 
@@ -275,13 +213,20 @@ elif page == "⚙️ Admin":
                 ct, ot
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                str(date), semaine, kuyok,
-                field, fruit, autres,
-                presence, taggui,
-                bb_ind, bb_group,
-                ct, ot
+                str(date),
+                int(semaine),
+                kuyok,
+                int(field),
+                int(fruit),
+                int(autres),
+                int(presence),
+                int(taggui),
+                int(bb_ind),
+                int(bb_group),
+                int(ct),
+                int(ot)
             ))
 
-            conn.commit()
+            c.commit()
 
             st.success("Ajouté ✔️")
