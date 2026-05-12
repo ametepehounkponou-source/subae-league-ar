@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import plotly.graph_objects as go
 
 # =========================================================
 # CONFIG
 # =========================================================
 st.set_page_config(page_title="Subae League AR", layout="wide")
-st.title("🏆 Subae League AR - Pro Dashboard (SQLite)")
+st.title("🏆 Subae League AR - Dashboard KYK")
 
 # =========================================================
 # LOGIN
@@ -40,13 +39,13 @@ if not st.session_state.auth:
 is_admin = st.session_state.role == "admin"
 
 # =========================================================
-# SQLITE
+# SQLITE CONNECTION
 # =========================================================
-def conn():
+def get_conn():
     return sqlite3.connect("subae.db", check_same_thread=False)
 
-c = conn()
-cursor = c.cursor()
+conn = get_conn()
+cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS resultats (
@@ -66,12 +65,44 @@ CREATE TABLE IF NOT EXISTS resultats (
 )
 """)
 
-c.commit()
+conn.commit()
 
 # =========================================================
 # LOAD DATA
 # =========================================================
-df = pd.read_sql_query("SELECT * FROM resultats", c)
+df = pd.read_sql_query("SELECT * FROM resultats", conn)
+
+# =========================================================
+# SAFE EMPTY HANDLING
+# =========================================================
+if df.empty:
+    df = pd.DataFrame(columns=[
+        "id","date","semaine","kuyok",
+        "field","fruit","autres","presence",
+        "taggui","bb_ind","bb_group","ct","ot","points"
+    ])
+
+# =========================================================
+# CLEAN + POINTS CALCULATION (GLOBAL FIX)
+# =========================================================
+if not df.empty and "kuyok" in df.columns:
+
+    for col in ["field","fruit","autres","presence","taggui","bb_ind","bb_group","ct","ot"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    df["points"] = (
+        df["field"] * 1 +
+        df["fruit"] * 5 +
+        df["autres"] * 2 +
+        df["presence"] * 10 +
+        df["taggui"] * 20 +
+        df["bb_ind"] * 50 +
+        df["bb_group"] * 100 +
+        df["ct"] * 200 +
+        df["ot"] * 500
+    )
+else:
+    df["points"] = 0
 
 # =========================================================
 # KYK LIST
@@ -93,19 +124,7 @@ if page == "📊 Dashboard":
 
     st.header("📊 Dashboard Global")
 
-    if not df.empty:
-
-        df["points"] = (
-            df["field"] * 1 +
-            df["fruit"] * 5 +
-            df["autres"] * 2 +
-            df["presence"] * 10 +
-            df["taggui"] * 20 +
-            df["bb_ind"] * 50 +
-            df["bb_group"] * 100 +
-            df["ct"] * 200 +
-            df["ot"] * 500
-        )
+    if not df.empty and len(df) > 0:
 
         ranking = df.groupby("kuyok")["points"].sum().reset_index()
         ranking = ranking.sort_values("points", ascending=False)
@@ -116,6 +135,10 @@ if page == "📊 Dashboard":
         c2.metric("📈 Total points", int(ranking["points"].sum()))
         c3.metric("👥 KYK actifs", df["kuyok"].nunique())
 
+        st.subheader("🏆 Classement")
+        st.dataframe(ranking, use_container_width=True)
+
+        st.subheader("📊 Graphique")
         st.bar_chart(ranking.set_index("kuyok"))
 
 # =========================================================
@@ -125,18 +148,19 @@ elif page == "🧠 Analyse KYK":
 
     kyk = st.selectbox("Choisir KYK", all_kyk)
 
-    sub = df[df["kuyok"] == kyk]
+    sub = df[df["kuyok"] == kyk].copy()
 
     st.subheader(f"🧠 Analyse {kyk}")
 
     if not sub.empty:
 
-        st.metric("Points", int(sub["field"].sum() +
-                               sub["fruit"].sum()*5 +
-                               sub["presence"].sum()*10 +
-                               sub["taggui"].sum()*20))
+        st.metric("Points", int(sub["points"].sum()))
 
+        st.write("📊 Détail")
         st.write(sub.sum(numeric_only=True))
+
+    else:
+        st.info("Aucune donnée pour ce KYK")
 
 # =========================================================
 # COMPARAISON
@@ -149,16 +173,16 @@ elif page == "⚔️ Comparaison":
     s1 = df[df["kuyok"] == k1].sum(numeric_only=True)
     s2 = df[df["kuyok"] == k2].sum(numeric_only=True)
 
-    st.subheader("Comparaison")
+    st.subheader("⚔️ Comparaison KYK")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.write(k1)
+        st.write(f"### {k1}")
         st.write(s1)
 
     with col2:
-        st.write(k2)
+        st.write(f"### {k2}")
         st.write(s2)
 
 # =========================================================
@@ -166,6 +190,7 @@ elif page == "⚔️ Comparaison":
 # =========================================================
 elif page == "📂 Données":
 
+    st.subheader("📂 Données brutes")
     st.dataframe(df, use_container_width=True)
 
 # =========================================================
@@ -175,7 +200,6 @@ elif page == "⚙️ Admin":
 
     if not is_admin:
         st.error("Accès refusé")
-
     else:
 
         st.subheader("➕ Ajouter un résultat")
@@ -184,12 +208,10 @@ elif page == "⚙️ Admin":
 
             date = st.date_input("Date")
 
-            # ✅ FIX IMPORTANT : integer only
             semaine = st.number_input("Semaine", step=1, format="%d")
 
             kuyok = st.selectbox("KYK", all_kyk)
 
-            # ✅ tous en ENTIER (pas float)
             field = st.number_input("Field", step=1, format="%d")
             fruit = st.number_input("Fruit", step=1, format="%d")
             autres = st.number_input("Autres", step=1, format="%d")
@@ -211,7 +233,8 @@ elif page == "⚙️ Admin":
                 presence, taggui,
                 bb_ind, bb_group,
                 ct, ot
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 str(date),
                 int(semaine),
@@ -227,6 +250,6 @@ elif page == "⚙️ Admin":
                 int(ot)
             ))
 
-            c.commit()
+            conn.commit()
 
             st.success("Ajouté ✔️")
