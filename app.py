@@ -48,12 +48,15 @@ weights = {
 }
 
 # -----------------------
-# ADD RESULT
+# ADD RESULT (AVEC CALENDRIER)
 # -----------------------
 st.subheader("➕ Ajouter un résultat")
 
 with st.form("add"):
-    date = st.text_input("Date")
+
+    # 📅 CALENDRIER (IMPORTANT)
+    date = st.date_input("Date")
+
     semaine = st.number_input("Semaine", step=1)
     kuyok = st.selectbox("KYK", all_kyk)
 
@@ -71,7 +74,7 @@ with st.form("add"):
 
 if submit:
     new = {
-        "date": date,
+        "date": str(date),  # conversion propre
         "semaine": semaine,
         "kuyok": kuyok,
         "Passage sur le field": field,
@@ -90,13 +93,10 @@ if submit:
     st.success("Ajouté ✔️")
 
 # -----------------------
-# CALC POINTS
+# CALCUL POINTS
 # -----------------------
 def calc(row):
-    total = 0
-    for k, v in weights.items():
-        total += float(row.get(k, 0)) * v
-    return total
+    return sum(float(row.get(k, 0)) * v for k, v in weights.items())
 
 if not df.empty:
     for c in weights.keys():
@@ -127,7 +127,7 @@ top3["rank"] = ["🥇","🥈","🥉"]
 st.dataframe(top3[["rank","kuyok","points"]], hide_index=True)
 
 # -----------------------
-# GLOBAL CHART
+# GRAPH
 # -----------------------
 st.subheader("📊 Forces globales")
 st.bar_chart(ranking.set_index("kuyok")["points"])
@@ -158,10 +158,8 @@ for k in all_kyk:
 
     stats = {c: sub[c].sum() for c in weights.keys()}
 
-    total = sum(stats.values())
     ot_rate = (stats["Participation OT"] / stats["Fruit Mannam fixé"] * 100) if stats["Fruit Mannam fixé"] > 0 else 0
 
-    # TYPE KYK
     if stats["CT"] > stats["BB groupe"] and stats["CT"] > stats["Mannam présence"]:
         typ = "🧠 KYK impact"
     elif stats["Passage sur le field"] + stats["Mannam présence"] > stats["BB individuel"]:
@@ -170,8 +168,7 @@ for k in all_kyk:
         typ = "⚡ KYK équilibré"
 
     st.write(f"Type : {typ}")
-    st.write(f"Total points : {ranking[ranking['kuyok']==k]['points'].values[0] if k in ranking['kuyok'].values else 0:.0f}")
-    st.write(f"Taux conversion Mannam → OT : {ot_rate:.1f}%")
+    st.write(f"Taux conversion OT : {ot_rate:.1f}%")
 
     st.bar_chart(pd.DataFrame.from_dict(stats, orient="index"))
 
