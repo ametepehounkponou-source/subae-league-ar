@@ -55,7 +55,7 @@ if not st.session_state.auth:
 is_admin = st.session_state.role == "admin"
 
 # =========================================================
-# LOGOUT BUTTON
+# LOGOUT
 # =========================================================
 if st.sidebar.button("Logout"):
 
@@ -111,7 +111,7 @@ df = pd.read_sql_query(
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # =========================================================
-# CLEAN DATA
+# NUMERIC COLUMNS
 # =========================================================
 numeric_cols = [
     "field",
@@ -125,6 +125,9 @@ numeric_cols = [
     "ot"
 ]
 
+# =========================================================
+# CLEAN + POINTS
+# =========================================================
 if not df.empty:
 
     for c in numeric_cols:
@@ -137,9 +140,6 @@ if not df.empty:
             errors="coerce"
         ).fillna(0)
 
-    # =====================================================
-    # POINTS CALCULATION
-    # =====================================================
     df["points"] = (
         df["field"] * 1 +
         df["fruit"] * 5 +
@@ -153,10 +153,25 @@ if not df.empty:
     )
 
 else:
+
     df["points"] = 0
 
 # =========================================================
-# SIDEBAR NAVIGATION
+# LABEL FOR EDIT / DELETE
+# =========================================================
+if not df.empty:
+
+    df["label"] = (
+        df["kuyok"]
+        + " - "
+        + df["date"].astype(str)
+        + " (ID "
+        + df["id"].astype(str)
+        + ")"
+    )
+
+# =========================================================
+# SIDEBAR MENU
 # =========================================================
 page = st.sidebar.radio(
     "📂 Menu",
@@ -214,11 +229,11 @@ if page == "📊 Dashboard":
     )
 
     st.success(
-        f"🏆 Nombre total de points : {int(df['points'].sum())}"
+        f"🏆 Total global : {int(df['points'].sum())} points"
     )
 
 # =========================================================
-# KYK ANALYZER
+# ANALYZER
 # =========================================================
 elif page == "🧠 KYK Analyzer":
 
@@ -237,16 +252,12 @@ elif page == "🧠 KYK Analyzer":
 
     else:
 
-        total_points = int(
-            sub["points"].sum()
-        )
-
         st.metric(
             "🏆 Total Points",
-            total_points
+            int(sub["points"].sum())
         )
 
-        st.write("### Totaux Activités")
+        st.write("### Totaux activités")
 
         st.dataframe(
             sub[numeric_cols].sum().to_frame("Total"),
@@ -275,34 +286,22 @@ elif page == "🚨 Alertes":
 
         if sub.empty:
 
-            alerts.append((
-                k,
-                "😴 Inactif"
-            ))
+            alerts.append((k, "😴 Inactif"))
 
         elif sub["taggui"].sum() < 3:
 
-            alerts.append((
-                k,
-                "⚠️ Faible consolidation"
-            ))
+            alerts.append((k, "⚠️ Faible consolidation"))
 
         elif (
             sub["field"].sum() > 20 and
             sub["taggui"].sum() < 5
         ):
 
-            alerts.append((
-                k,
-                "⚠️ Trop de field pour peu de résultats"
-            ))
+            alerts.append((k, "⚠️ Inefficacité field"))
 
         else:
 
-            alerts.append((
-                k,
-                "🟢 Stable"
-            ))
+            alerts.append((k, "🟢 Stable"))
 
     st.table(
         pd.DataFrame(
@@ -397,7 +396,7 @@ elif page == "📈 Funnel":
 # =========================================================
 elif page == "📅 Historique":
 
-    st.subheader("📅 Historique Global")
+    st.subheader("📅 Historique")
 
     history = (
         df.groupby("semaine")["points"]
@@ -485,63 +484,16 @@ elif page == "⚙️ Admin":
 
                 st.markdown("## Activités")
 
-                field = st.number_input(
-                    "Field",
-                    min_value=0,
-                    step=1
-                )
+                field = st.number_input("Field", min_value=0)
+                fruit = st.number_input("Fruit Mannam", min_value=0)
+                autres = st.number_input("Autres Fruits", min_value=0)
+                presence = st.number_input("Présence", min_value=0)
+                taggui = st.number_input("Taggui", min_value=0)
+                bb_ind = st.number_input("BB Individuel", min_value=0)
+                bb_group = st.number_input("BB Groupe", min_value=0)
+                ct = st.number_input("CT", min_value=0)
+                ot = st.number_input("OT", min_value=0)
 
-                fruit = st.number_input(
-                    "Fruit Mannam",
-                    min_value=0,
-                    step=1
-                )
-
-                autres = st.number_input(
-                    "Autres Fruits",
-                    min_value=0,
-                    step=1
-                )
-
-                presence = st.number_input(
-                    "Présence",
-                    min_value=0,
-                    step=1
-                )
-
-                taggui = st.number_input(
-                    "Taggui",
-                    min_value=0,
-                    step=1
-                )
-
-                bb_ind = st.number_input(
-                    "BB Individuel",
-                    min_value=0,
-                    step=1
-                )
-
-                bb_group = st.number_input(
-                    "BB Groupe",
-                    min_value=0,
-                    step=1
-                )
-
-                ct = st.number_input(
-                    "CT",
-                    min_value=0,
-                    step=1
-                )
-
-                ot = st.number_input(
-                    "OT",
-                    min_value=0,
-                    step=1
-                )
-
-                # =========================================
-                # POINTS
-                # =========================================
                 points = (
                     field * 1 +
                     fruit * 5 +
@@ -559,12 +511,10 @@ elif page == "⚙️ Admin":
 
                 📅 Date : {date}
 
-                📆 Semaine : {semaine}
-
-                🏆 Total Points : {points}
+                🏆 Points : {points}
                 """)
 
-                confirmation = st.checkbox(
+                confirm_add = st.checkbox(
                     "✅ Je confirme l'ajout"
                 )
 
@@ -577,10 +527,10 @@ elif page == "⚙️ Admin":
                 if points == 0:
 
                     st.error(
-                        "❌ Impossible d'ajouter 0 activité"
+                        "❌ Impossible d'ajouter une entrée vide"
                     )
 
-                elif not confirmation:
+                elif not confirm_add:
 
                     st.error(
                         "❌ Veuillez confirmer l'ajout"
@@ -626,7 +576,7 @@ elif page == "⚙️ Admin":
 
                     👤 KYK : {k}
 
-                    🏆 Points : {points}
+                    🏆 Points enregistrés : {points}
                     """)
 
                     st.balloons()
@@ -646,12 +596,16 @@ elif page == "⚙️ Admin":
 
             else:
 
-                selected_id = st.selectbox(
-                    "Choisir ID",
-                    df["id"]
+                selected_label = st.selectbox(
+                    "Choisir une entrée",
+                    df["label"]
                 )
 
-                row = df[df["id"] == selected_id].iloc[0]
+                row = df[
+                    df["label"] == selected_label
+                ].iloc[0]
+
+                selected_id = row["id"]
 
                 with st.form("edit_form"):
 
@@ -729,7 +683,7 @@ elif page == "⚙️ Admin":
                     )
 
                     st.info(f"""
-                    🏆 Nouveau total : {edit_points}
+                    🏆 Nouveau total : {edit_points} points
                     """)
 
                     confirm_update = st.checkbox(
@@ -785,7 +739,7 @@ elif page == "⚙️ Admin":
                         conn.commit()
 
                         st.success("""
-                        ✅ Modification enregistrée
+                        ✅ Modification enregistrée avec succès
                         """)
 
                         st.balloons()
@@ -805,15 +759,17 @@ elif page == "⚙️ Admin":
 
             else:
 
-                delete_id = st.selectbox(
-                    "Choisir ID",
-                    df["id"],
+                delete_label = st.selectbox(
+                    "Choisir une entrée",
+                    df["label"],
                     key="delete_select"
                 )
 
                 row_delete = df[
-                    df["id"] == delete_id
+                    df["label"] == delete_label
                 ]
+
+                delete_id = row_delete.iloc[0]["id"]
 
                 st.dataframe(
                     row_delete,
@@ -850,7 +806,7 @@ elif page == "⚙️ Admin":
                         st.success(f"""
                         ✅ Entrée supprimée avec succès !
 
-                        🗑️ ID supprimé : {delete_id}
+                        🗑️ {delete_label}
                         """)
 
                         st.balloons()
