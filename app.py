@@ -9,7 +9,7 @@ st.title("🏆 Subae League AR")
 FILE = "resultats.csv"
 
 # -----------------------
-# CHARGEMENT
+# LOAD DATA
 # -----------------------
 if os.path.exists(FILE):
     resultats = pd.read_csv(FILE)
@@ -45,7 +45,7 @@ points_map = {
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # -----------------------
-# CALCUL
+# CALCUL POINTS
 # -----------------------
 def calc(row):
     total = 0
@@ -64,8 +64,6 @@ if not resultats.empty:
             resultats[col] = 0
 
     resultats["points"] = resultats.apply(calc, axis=1)
-else:
-    resultats["points"] = 0
 
 # -----------------------
 # CLASSEMENT GLOBAL
@@ -80,7 +78,36 @@ st.subheader("🏆 Classement général")
 st.dataframe(classement, hide_index=True)
 
 # -----------------------
-# 🥇 TOP 3
+# 📈 PROGRESSION HEBDO
+# -----------------------
+st.subheader("📊 Progression semaine")
+
+if not resultats.empty:
+
+    weekly = resultats.groupby(["semaine", "kuyok"])["points"].sum().reset_index()
+    pivot = weekly.pivot(index="kuyok", columns="semaine", values="points").fillna(0)
+
+    st.dataframe(pivot)
+
+    # -----------------------
+    # 🧠 PROGRESSION / RÉGRESSION
+    # -----------------------
+    st.subheader("📈 Meilleure progression / 📉 plus grosse régression")
+
+    if pivot.shape[1] >= 2:
+        last_week = pivot.columns.max()
+        prev_week = last_week - 1
+
+        pivot["diff"] = pivot[last_week] - pivot[prev_week]
+
+        best = pivot["diff"].idxmax()
+        worst = pivot["diff"].idxmin()
+
+        st.success(f"🔥 Meilleure progression : {best} (+{pivot['diff'].max()})")
+        st.error(f"📉 Plus grosse régression : {worst} ({pivot['diff'].min()})")
+
+# -----------------------
+# TOP 3
 # -----------------------
 st.subheader("🥇 Top 3")
 top3 = classement.head(3).copy()
@@ -88,15 +115,15 @@ top3["rank"] = ["🥇", "🥈", "🥉"]
 st.dataframe(top3[["rank", "kuyok", "points"]], hide_index=True)
 
 # -----------------------
-# 📊 BAR CHART GLOBAL
+# GRAPH GLOBAL
 # -----------------------
 st.subheader("📊 Forces globales")
 st.bar_chart(classement.set_index("kuyok")["points"])
 
 # -----------------------
-# 🧠 ANALYSE PAR KYK (FORCES / FAIBLESSES)
+# ANALYSE PAR KYK
 # -----------------------
-st.subheader("🧠 Analyse des forces et faiblesses")
+st.subheader("🧠 Analyse des forces")
 
 for kyk in all_kyk:
     df = resultats[resultats["kuyok"] == kyk]
@@ -114,17 +141,10 @@ for kyk in all_kyk:
     stat_df = pd.DataFrame.from_dict(stats, orient="index", columns=["points"])
     stat_df = stat_df.sort_values("points", ascending=False)
 
-    # point fort / faible
-    strong = stat_df.index[0]
-    weak = stat_df.index[-1]
-
-    st.write(f"🔥 Point fort : **{strong}**")
-    st.write(f"❄️ Point faible : **{weak}**")
-
     st.bar_chart(stat_df)
 
 # -----------------------
-# DONNÉES BRUTES
+# DATA
 # -----------------------
-st.subheader("📊 Données brutes")
+st.subheader("📊 Résultats bruts")
 st.dataframe(resultats)
