@@ -45,7 +45,7 @@ points_map = {
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # -----------------------
-# CALCUL POINTS
+# CALCUL
 # -----------------------
 def calc(row):
     total = 0
@@ -54,7 +54,7 @@ def calc(row):
     return total
 
 # -----------------------
-# PREPARATION DATA
+# PREP DATA
 # -----------------------
 if not resultats.empty:
     for col in points_map.keys():
@@ -64,53 +64,67 @@ if not resultats.empty:
             resultats[col] = 0
 
     resultats["points"] = resultats.apply(calc, axis=1)
-
-    classement = resultats.groupby("kuyok")["points"].sum().reset_index()
 else:
-    classement = pd.DataFrame(columns=["kuyok", "points"])
+    resultats["points"] = 0
 
+# -----------------------
+# CLASSEMENT GLOBAL
+# -----------------------
 base = pd.DataFrame({"kuyok": all_kyk})
-classement = base.merge(classement, on="kuyok", how="left").fillna(0)
 
+classement = resultats.groupby("kuyok")["points"].sum().reset_index()
+classement = base.merge(classement, on="kuyok", how="left").fillna(0)
 classement = classement.sort_values("points", ascending=False)
 
-# -----------------------
-# 🏆 TOP 3 VISUEL
-# -----------------------
-st.subheader("🥇 Top 3 du championnat")
-
-top3 = classement.head(3).copy()
-top3["position"] = ["🥇", "🥈", "🥉"]
-
-st.dataframe(top3[["position", "kuyok", "points"]], hide_index=True)
-
-# -----------------------
-# 🏆 CLASSEMENT COMPLET
-# -----------------------
-st.subheader("🏆 Classement général (tous les KYK)")
+st.subheader("🏆 Classement général")
 st.dataframe(classement, hide_index=True)
 
 # -----------------------
-# 📊 GRAPHIQUE GLOBAL
+# 🥇 TOP 3
 # -----------------------
-st.subheader("📈 Graphique des points")
-
-chart_data = classement.set_index("kuyok")["points"]
-st.bar_chart(chart_data)
+st.subheader("🥇 Top 3")
+top3 = classement.head(3).copy()
+top3["rank"] = ["🥇", "🥈", "🥉"]
+st.dataframe(top3[["rank", "kuyok", "points"]], hide_index=True)
 
 # -----------------------
-# 📊 ÉVOLUTION SI DONNÉES
+# 📊 BAR CHART GLOBAL
 # -----------------------
-if not resultats.empty:
-    st.subheader("📊 Évolution des performances")
+st.subheader("📊 Forces globales")
+st.bar_chart(classement.set_index("kuyok")["points"])
 
-    evo = resultats.groupby(["semaine", "kuyok"])["points"].sum().reset_index()
-    pivot = evo.pivot(index="semaine", columns="kuyok", values="points").fillna(0)
+# -----------------------
+# 🧠 ANALYSE PAR KYK (FORCES / FAIBLESSES)
+# -----------------------
+st.subheader("🧠 Analyse des forces et faiblesses")
 
-    st.line_chart(pivot)
+for kyk in all_kyk:
+    df = resultats[resultats["kuyok"] == kyk]
+
+    st.markdown(f"### {kyk}")
+
+    if df.empty:
+        st.info("Aucune donnée")
+        continue
+
+    stats = {}
+    for k in points_map.keys():
+        stats[k] = df[k].sum()
+
+    stat_df = pd.DataFrame.from_dict(stats, orient="index", columns=["points"])
+    stat_df = stat_df.sort_values("points", ascending=False)
+
+    # point fort / faible
+    strong = stat_df.index[0]
+    weak = stat_df.index[-1]
+
+    st.write(f"🔥 Point fort : **{strong}**")
+    st.write(f"❄️ Point faible : **{weak}**")
+
+    st.bar_chart(stat_df)
 
 # -----------------------
 # DONNÉES BRUTES
 # -----------------------
-st.subheader("📊 Résultats bruts")
+st.subheader("📊 Données brutes")
 st.dataframe(resultats)
