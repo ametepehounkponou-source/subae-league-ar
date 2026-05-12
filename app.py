@@ -43,13 +43,13 @@ points_map = {
 }
 
 # -----------------------
-# SAISIE MANUELLE SIMPLE
+# SAISIE
 # -----------------------
-st.subheader("➕ Ajouter résultat (par KYK)")
+st.subheader("➕ Ajouter résultat")
 
-date = st.text_input("Date (ex: 2026-05-11)")
+date = st.text_input("Date")
 semaine = st.number_input("Semaine", step=1)
-kuyok = st.text_input("Kuyok (ex: KYK2)")
+kuyok = st.text_input("Kuyok")
 
 field = st.number_input("Passage sur le field", step=1)
 fruit = st.number_input("Fruit Mannam fixé", step=1)
@@ -90,20 +90,34 @@ def calc(row):
         total += float(row.get(k, 0)) * v
     return total
 
+# -----------------------
+# 🏆 CLASSEMENT TOUJOURS AFFICHÉ
+# -----------------------
+all_kyk = [f"KYK{i}" for i in range(1, 19)]
+base = pd.DataFrame({"kuyok": all_kyk})
+
 if not resultats.empty:
     for col in points_map.keys():
-        resultats[col] = pd.to_numeric(resultats[col], errors="coerce").fillna(0)
+        if col in resultats.columns:
+            resultats[col] = pd.to_numeric(resultats[col], errors="coerce").fillna(0)
+        else:
+            resultats[col] = 0
 
     resultats["points"] = resultats.apply(calc, axis=1)
 
     classement = resultats.groupby("kuyok")["points"].sum().reset_index()
-    classement = classement.sort_values("points", ascending=False)
+    classement = base.merge(classement, on="kuyok", how="left").fillna(0)
+else:
+    classement = base.copy()
+    classement["points"] = 0
 
-    st.subheader("🏆 Classement général")
-    st.dataframe(classement)
+classement = classement.sort_values("points", ascending=False)
+
+st.subheader("🏆 Classement général")
+st.dataframe(classement)
 
 # -----------------------
 # DONNÉES
 # -----------------------
-st.subheader("📊 Résultats enregistrés")
+st.subheader("📊 Résultats")
 st.dataframe(resultats)
