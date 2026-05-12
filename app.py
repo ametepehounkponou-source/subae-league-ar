@@ -5,7 +5,10 @@ import sqlite3
 # =========================================================
 # CONFIG
 # =========================================================
-st.set_page_config(page_title="KYK Intelligence System", layout="wide")
+st.set_page_config(
+    page_title="KYK Intelligence System",
+    layout="wide"
+)
 
 st.title("🏆 KYK Intelligence System")
 
@@ -42,7 +45,7 @@ if st.sidebar.button("Login"):
         st.session_state.role = USERS[user]["role"]
 
     else:
-        st.error("Erreur login")
+        st.error("❌ Erreur login")
 
 if not st.session_state.auth:
     st.stop()
@@ -50,7 +53,7 @@ if not st.session_state.auth:
 is_admin = st.session_state.role == "admin"
 
 # =========================================================
-# DB
+# DATABASE
 # =========================================================
 conn = sqlite3.connect(
     "subae.db",
@@ -59,6 +62,9 @@ conn = sqlite3.connect(
 
 cursor = conn.cursor()
 
+# =========================================================
+# TABLE
+# =========================================================
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS resultats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,7 +126,7 @@ if not df.empty:
         ).fillna(0)
 
     # =====================================================
-    # CALCUL POINTS
+    # CALCUL DES POINTS
     # =====================================================
     df["points"] = (
         df["field"] * 1 +
@@ -148,7 +154,6 @@ page = st.sidebar.radio(
         "🚨 Alertes",
         "🩺 Santé KYK",
         "📈 Funnel",
-        "🎯 Objectifs",
         "📅 Historique",
         "⚔️ Comparaison",
         "📂 Données",
@@ -181,11 +186,11 @@ ranking = ranking.sort_values(
 )
 
 # =========================================================
-# 📊 DASHBOARD
+# DASHBOARD
 # =========================================================
 if page == "📊 Dashboard":
 
-    st.header("📊 Vue globale")
+    st.header("📊 Classement Général")
 
     st.bar_chart(
         ranking.set_index("kuyok")
@@ -197,36 +202,39 @@ if page == "📊 Dashboard":
     )
 
 # =========================================================
-# 🧠 KYK ANALYZER
+# ANALYZER
 # =========================================================
 elif page == "🧠 KYK Analyzer":
 
     k = st.selectbox(
-        "KYK",
+        "Choisir KYK",
         all_kyk
     )
 
     sub = df[df["kuyok"] == k]
 
-    st.subheader(k)
+    st.subheader(f"Analyse de {k}")
 
     if sub.empty:
 
-        st.info("Aucune donnée")
+        st.warning("Aucune donnée")
 
     else:
 
-        total_points = sub["points"].sum()
-
-        st.metric(
-            "Total Points",
-            int(total_points)
+        total_points = int(
+            sub["points"].sum()
         )
 
-        st.write("### Activités cumulées")
+        st.metric(
+            "🏆 Total Points",
+            total_points
+        )
 
-        st.write(
-            sub[numeric_cols].sum()
+        st.write("### Totaux Activités")
+
+        st.dataframe(
+            sub[numeric_cols].sum().to_frame("Total"),
+            use_container_width=True
         )
 
         st.write("### Historique")
@@ -237,11 +245,11 @@ elif page == "🧠 KYK Analyzer":
         )
 
 # =========================================================
-# 🚨 ALERTES
+# ALERTES
 # =========================================================
 elif page == "🚨 Alertes":
 
-    st.subheader("Alertes intelligentes")
+    st.subheader("🚨 Alertes intelligentes")
 
     alerts = []
 
@@ -253,7 +261,7 @@ elif page == "🚨 Alertes":
 
             alerts.append((
                 k,
-                "😴 Aucun activité"
+                "😴 Inactif"
             ))
 
         elif sub["taggui"].sum() < 3:
@@ -270,14 +278,14 @@ elif page == "🚨 Alertes":
 
             alerts.append((
                 k,
-                "⚠️ Inefficacité field"
+                "⚠️ Trop de field pour peu de résultats"
             ))
 
         else:
 
             alerts.append((
                 k,
-                "🟢 OK"
+                "🟢 Stable"
             ))
 
     st.table(
@@ -288,11 +296,11 @@ elif page == "🚨 Alertes":
     )
 
 # =========================================================
-# 🩺 SANTÉ KYK
+# SANTÉ
 # =========================================================
 elif page == "🩺 Santé KYK":
 
-    st.subheader("Santé des KYK")
+    st.subheader("🩺 Santé des KYK")
 
     health = []
 
@@ -336,16 +344,16 @@ elif page == "🩺 Santé KYK":
     )
 
 # =========================================================
-# 📈 FUNNEL
+# FUNNEL
 # =========================================================
 elif page == "📈 Funnel":
 
-    st.subheader("Pipeline évangélisation")
+    st.subheader("📈 Funnel Global")
 
     funnel = {
         "Field": int(df["field"].sum()),
-        "Fruit Mannam": int(df["fruit"].sum()),
-        "Autres Fruits": int(df["autres"].sum()),
+        "Fruit": int(df["fruit"].sum()),
+        "Autres": int(df["autres"].sum()),
         "Présence": int(df["presence"].sum()),
         "Taggui": int(df["taggui"].sum()),
         "BB Individuel": int(df["bb_ind"].sum()),
@@ -356,7 +364,7 @@ elif page == "📈 Funnel":
 
     funnel_df = pd.DataFrame(
         funnel.items(),
-        columns=["Étape", "Total"]
+        columns=["Étape", "Valeur"]
     )
 
     st.dataframe(
@@ -369,24 +377,11 @@ elif page == "📈 Funnel":
     )
 
 # =========================================================
-# 🎯 OBJECTIFS
-# =========================================================
-elif page == "🎯 Objectifs":
-
-    st.subheader("Objectifs KYK")
-
-    st.info(
-        "Module KPI évolutif à développer"
-    )
-
-# =========================================================
-# 📅 HISTORIQUE
+# HISTORIQUE
 # =========================================================
 elif page == "📅 Historique":
 
-    st.subheader(
-        "Historique des performances"
-    )
+    st.subheader("📅 Historique Global")
 
     history = (
         df.groupby("semaine")["points"]
@@ -396,7 +391,7 @@ elif page == "📅 Historique":
     st.line_chart(history)
 
 # =========================================================
-# ⚔️ COMPARAISON
+# COMPARAISON
 # =========================================================
 elif page == "⚔️ Comparaison":
 
@@ -420,11 +415,11 @@ elif page == "⚔️ Comparaison":
     )
 
 # =========================================================
-# 📂 DONNÉES
+# DONNÉES
 # =========================================================
 elif page == "📂 Données":
 
-    st.subheader("Base de données")
+    st.subheader("📂 Toutes les données")
 
     st.dataframe(
         df,
@@ -432,196 +427,424 @@ elif page == "📂 Données":
     )
 
 # =========================================================
-# ⚙️ ADMIN
+# ADMIN
 # =========================================================
 elif page == "⚙️ Admin":
 
     if not is_admin:
 
-        st.error("Accès refusé")
+        st.error("⛔ Accès refusé")
 
     else:
 
-        st.subheader("Ajout données KYK")
+        st.header("⚙️ Administration")
 
-        with st.form("add"):
-
-            # =============================================
-            # INFOS
-            # =============================================
-            date = st.date_input("Date")
-
-            semaine = st.number_input(
-                "Semaine",
-                min_value=1,
-                step=1
-            )
-
-            k = st.selectbox(
-                "KYK",
-                all_kyk
-            )
-
-            st.markdown("## Activités")
-
-            # =============================================
-            # INPUTS QUANTITÉS
-            # =============================================
-            field = st.number_input(
-                "Passages sur le Field",
-                min_value=0,
-                step=1
-            )
-
-            fruit = st.number_input(
-                "Fruit Mannam",
-                min_value=0,
-                step=1
-            )
-
-            autres = st.number_input(
-                "Autres Fruits (NTF, EM...)",
-                min_value=0,
-                step=1
-            )
-
-            presence = st.number_input(
-                "Mannam Présence",
-                min_value=0,
-                step=1
-            )
-
-            taggui = st.number_input(
-                "Mannam Taggui",
-                min_value=0,
-                step=1
-            )
-
-            bb_ind = st.number_input(
-                "BB Individuel",
-                min_value=0,
-                step=1
-            )
-
-            bb_group = st.number_input(
-                "BB Groupe",
-                min_value=0,
-                step=1
-            )
-
-            ct = st.number_input(
-                "CT",
-                min_value=0,
-                step=1
-            )
-
-            ot = st.number_input(
-                "Participation OT",
-                min_value=0,
-                step=1
-            )
-
-            # =============================================
-            # CALCUL DES POINTS
-            # =============================================
-            points = (
-                field * 1 +
-                fruit * 5 +
-                autres * 2 +
-                presence * 10 +
-                taggui * 20 +
-                bb_ind * 50 +
-                bb_group * 100 +
-                ct * 200 +
-                ot * 500
-            )
-
-            st.markdown("## 🏆 Calcul automatique")
-
-            st.write(
-                f"Field : {field} × 1 = {field * 1}"
-            )
-
-            st.write(
-                f"Fruit Mannam : {fruit} × 5 = {fruit * 5}"
-            )
-
-            st.write(
-                f"Autres Fruits : {autres} × 2 = {autres * 2}"
-            )
-
-            st.write(
-                f"Présence : {presence} × 10 = {presence * 10}"
-            )
-
-            st.write(
-                f"Taggui : {taggui} × 20 = {taggui * 20}"
-            )
-
-            st.write(
-                f"BB Individuel : {bb_ind} × 50 = {bb_ind * 50}"
-            )
-
-            st.write(
-                f"BB Groupe : {bb_group} × 100 = {bb_group * 100}"
-            )
-
-            st.write(
-                f"CT : {ct} × 200 = {ct * 200}"
-            )
-
-            st.write(
-                f"OT : {ot} × 500 = {ot * 500}"
-            )
-
-            st.success(
-                f"🏆 TOTAL POINTS = {points}"
-            )
-
-            submit = st.form_submit_button(
-                "Ajouter"
-            )
+        tabs = st.tabs([
+            "➕ Ajouter",
+            "✏️ Modifier",
+            "🗑️ Supprimer"
+        ])
 
         # =================================================
-        # INSERT DB
+        # AJOUTER
         # =================================================
-        if submit:
+        with tabs[0]:
 
-            cursor.execute("""
-            INSERT INTO resultats (
-                date,
-                semaine,
-                kuyok,
-                field,
-                fruit,
-                autres,
-                presence,
-                taggui,
-                bb_ind,
-                bb_group,
-                ct,
-                ot
-            )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                str(date),
-                int(semaine),
-                k,
-                int(field),
-                int(fruit),
-                int(autres),
-                int(presence),
-                int(taggui),
-                int(bb_ind),
-                int(bb_group),
-                int(ct),
-                int(ot)
-            ))
+            st.subheader("➕ Ajouter des données")
 
-            conn.commit()
+            with st.form("add_form"):
 
-            st.success(
-                f"✅ Données ajoutées pour {k} | Points : {points}"
-            )
+                # =========================================
+                # INFOS
+                # =========================================
+                date = st.date_input("Date")
 
-            st.rerun()
+                semaine = st.number_input(
+                    "Semaine",
+                    min_value=1,
+                    step=1
+                )
+
+                k = st.selectbox(
+                    "KYK",
+                    all_kyk
+                )
+
+                st.markdown("## Activités")
+
+                # =========================================
+                # INPUTS
+                # =========================================
+                field = st.number_input(
+                    "Field",
+                    min_value=0,
+                    step=1
+                )
+
+                fruit = st.number_input(
+                    "Fruit Mannam",
+                    min_value=0,
+                    step=1
+                )
+
+                autres = st.number_input(
+                    "Autres Fruits",
+                    min_value=0,
+                    step=1
+                )
+
+                presence = st.number_input(
+                    "Présence",
+                    min_value=0,
+                    step=1
+                )
+
+                taggui = st.number_input(
+                    "Taggui",
+                    min_value=0,
+                    step=1
+                )
+
+                bb_ind = st.number_input(
+                    "BB Individuel",
+                    min_value=0,
+                    step=1
+                )
+
+                bb_group = st.number_input(
+                    "BB Groupe",
+                    min_value=0,
+                    step=1
+                )
+
+                ct = st.number_input(
+                    "CT",
+                    min_value=0,
+                    step=1
+                )
+
+                ot = st.number_input(
+                    "OT",
+                    min_value=0,
+                    step=1
+                )
+
+                # =========================================
+                # CALCUL DES POINTS
+                # =========================================
+                points = (
+                    field * 1 +
+                    fruit * 5 +
+                    autres * 2 +
+                    presence * 10 +
+                    taggui * 20 +
+                    bb_ind * 50 +
+                    bb_group * 100 +
+                    ct * 200 +
+                    ot * 500
+                )
+
+                # =========================================
+                # RÉSUMÉ
+                # =========================================
+                st.markdown("## 📋 Résumé avant validation")
+
+                st.info(f"""
+                👤 KYK : {k}
+
+                📅 Date : {date}
+
+                📆 Semaine : {semaine}
+
+                🏆 Total Points : {points}
+                """)
+
+                resume_df = pd.DataFrame({
+                    "Activité": [
+                        "Field",
+                        "Fruit Mannam",
+                        "Autres Fruits",
+                        "Présence",
+                        "Taggui",
+                        "BB Individuel",
+                        "BB Groupe",
+                        "CT",
+                        "OT"
+                    ],
+                    "Quantité": [
+                        field,
+                        fruit,
+                        autres,
+                        presence,
+                        taggui,
+                        bb_ind,
+                        bb_group,
+                        ct,
+                        ot
+                    ]
+                })
+
+                st.dataframe(
+                    resume_df,
+                    use_container_width=True
+                )
+
+                # =========================================
+                # CONFIRMATION
+                # =========================================
+                confirmation = st.checkbox(
+                    "✅ Je confirme l'ajout des données"
+                )
+
+                submit = st.form_submit_button(
+                    "Ajouter les données"
+                )
+
+            # =============================================
+            # INSERTION DB
+            # =============================================
+            if submit:
+
+                if not confirmation:
+
+                    st.error(
+                        "❌ Veuillez confirmer avant validation"
+                    )
+
+                else:
+
+                    cursor.execute("""
+                    INSERT INTO resultats (
+                        date,
+                        semaine,
+                        kuyok,
+                        field,
+                        fruit,
+                        autres,
+                        presence,
+                        taggui,
+                        bb_ind,
+                        bb_group,
+                        ct,
+                        ot
+                    )
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, (
+                        str(date),
+                        int(semaine),
+                        k,
+                        int(field),
+                        int(fruit),
+                        int(autres),
+                        int(presence),
+                        int(taggui),
+                        int(bb_ind),
+                        int(bb_group),
+                        int(ct),
+                        int(ot)
+                    ))
+
+                    conn.commit()
+
+                    st.success(f"""
+                    ✅ Données ajoutées avec succès !
+
+                    👤 KYK : {k}
+
+                    🏆 Points enregistrés : {points}
+
+                    📅 Semaine : {semaine}
+                    """)
+
+                    st.balloons()
+
+                    st.rerun()
+
+        # =================================================
+        # MODIFIER
+        # =================================================
+        with tabs[1]:
+
+            st.subheader("✏️ Modifier une entrée")
+
+            if df.empty:
+
+                st.warning("Aucune donnée")
+
+            else:
+
+                selected_id = st.selectbox(
+                    "Choisir ID",
+                    df["id"]
+                )
+
+                row = df[df["id"] == selected_id].iloc[0]
+
+                with st.form("edit_form"):
+
+                    edit_date = st.text_input(
+                        "Date",
+                        value=row["date"]
+                    )
+
+                    edit_semaine = st.number_input(
+                        "Semaine",
+                        value=int(row["semaine"]),
+                        step=1
+                    )
+
+                    edit_k = st.selectbox(
+                        "KYK",
+                        all_kyk,
+                        index=all_kyk.index(row["kuyok"])
+                    )
+
+                    edit_field = st.number_input(
+                        "Field",
+                        value=int(row["field"])
+                    )
+
+                    edit_fruit = st.number_input(
+                        "Fruit",
+                        value=int(row["fruit"])
+                    )
+
+                    edit_autres = st.number_input(
+                        "Autres",
+                        value=int(row["autres"])
+                    )
+
+                    edit_presence = st.number_input(
+                        "Présence",
+                        value=int(row["presence"])
+                    )
+
+                    edit_taggui = st.number_input(
+                        "Taggui",
+                        value=int(row["taggui"])
+                    )
+
+                    edit_bb_ind = st.number_input(
+                        "BB Individuel",
+                        value=int(row["bb_ind"])
+                    )
+
+                    edit_bb_group = st.number_input(
+                        "BB Groupe",
+                        value=int(row["bb_group"])
+                    )
+
+                    edit_ct = st.number_input(
+                        "CT",
+                        value=int(row["ct"])
+                    )
+
+                    edit_ot = st.number_input(
+                        "OT",
+                        value=int(row["ot"])
+                    )
+
+                    update_btn = st.form_submit_button(
+                        "💾 Sauvegarder"
+                    )
+
+                if update_btn:
+
+                    cursor.execute("""
+                    UPDATE resultats
+                    SET
+                        date=?,
+                        semaine=?,
+                        kuyok=?,
+                        field=?,
+                        fruit=?,
+                        autres=?,
+                        presence=?,
+                        taggui=?,
+                        bb_ind=?,
+                        bb_group=?,
+                        ct=?,
+                        ot=?
+                    WHERE id=?
+                    """, (
+                        edit_date,
+                        int(edit_semaine),
+                        edit_k,
+                        int(edit_field),
+                        int(edit_fruit),
+                        int(edit_autres),
+                        int(edit_presence),
+                        int(edit_taggui),
+                        int(edit_bb_ind),
+                        int(edit_bb_group),
+                        int(edit_ct),
+                        int(edit_ot),
+                        int(selected_id)
+                    ))
+
+                    conn.commit()
+
+                    st.success(
+                        "✅ Modification enregistrée avec succès"
+                    )
+
+                    st.rerun()
+
+        # =================================================
+        # SUPPRIMER
+        # =================================================
+        with tabs[2]:
+
+            st.subheader("🗑️ Supprimer une entrée")
+
+            if df.empty:
+
+                st.warning("Aucune donnée")
+
+            else:
+
+                delete_id = st.selectbox(
+                    "Choisir ID à supprimer",
+                    df["id"],
+                    key="delete_select"
+                )
+
+                row_delete = df[
+                    df["id"] == delete_id
+                ]
+
+                st.dataframe(
+                    row_delete,
+                    use_container_width=True
+                )
+
+                confirm_delete = st.checkbox(
+                    "⚠️ Je confirme la suppression"
+                )
+
+                if st.button(
+                    "❌ Supprimer définitivement"
+                ):
+
+                    if not confirm_delete:
+
+                        st.error(
+                            "❌ Veuillez confirmer la suppression"
+                        )
+
+                    else:
+
+                        cursor.execute("""
+                        DELETE FROM resultats
+                        WHERE id=?
+                        """, (
+                            int(delete_id),
+                        ))
+
+                        conn.commit()
+
+                        st.success(
+                            "✅ Donnée supprimée avec succès"
+                        )
+
+                        st.rerun()
