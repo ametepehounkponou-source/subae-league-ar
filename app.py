@@ -2,14 +2,21 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.graph_objects as go
+from datetime import datetime
 
-st.set_page_config(page_title="Subae League AR")
+# =========================================================
+# CONFIG
+# =========================================================
+st.set_page_config(
+    page_title="Subae League AR",
+    layout="wide"
+)
 
 st.title("🏆 Subae League AR - Pro Dashboard")
 
-# =======================
-# 🔐 LOGIN SYSTEM
-# =======================
+# =========================================================
+# LOGIN SYSTEM
+# =========================================================
 USERS = {
     "admin": {"password": "Kakashisensei90", "role": "admin"},
     "Membre": {"password": "SubaeleagueAR", "role": "viewer"}
@@ -37,9 +44,9 @@ if not st.session_state.auth:
 
 is_admin = st.session_state.role == "admin"
 
-# =======================
-# 📁 DATA
-# =======================
+# =========================================================
+# DATA
+# =========================================================
 FILE = "resultats.csv"
 
 if os.path.exists(FILE):
@@ -72,10 +79,11 @@ weights = {
     "Participation OT": 500
 }
 
-# =======================
-# ➕ ADD RESULT (ADMIN ONLY)
-# =======================
+# =========================================================
+# ADD RESULT
+# =========================================================
 if is_admin:
+
     st.subheader("➕ Ajouter un résultat")
 
     with st.form("add"):
@@ -97,6 +105,7 @@ if is_admin:
         submit = st.form_submit_button("Ajouter")
 
     if submit:
+
         new = {
             "date": str(date),
             "semaine": semaine,
@@ -114,71 +123,349 @@ if is_admin:
 
         df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
         df.to_csv(FILE, index=False)
+
         st.success("Ajouté ✔️")
 
-# =======================
-# 🧮 POINTS
-# =======================
+# =========================================================
+# CLEAN DATA
+# =========================================================
+if not df.empty:
+
+    df["date"] = pd.to_datetime(df["date"])
+
+    for c in weights.keys():
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+# =========================================================
+# CALCUL POINTS
+# =========================================================
 def calc(row):
     return sum(float(row.get(k, 0)) * v for k, v in weights.items())
 
 if not df.empty:
-    for c in weights.keys():
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
     df["points"] = df.apply(calc, axis=1)
 else:
     df["points"] = 0
 
-# =======================
-# 🏆 CLASSEMENT
-# =======================
+# =========================================================
+# RANKING
+# =========================================================
 base = pd.DataFrame({"kuyok": all_kyk})
 
 ranking = df.groupby("kuyok")["points"].sum().reset_index()
-ranking = base.merge(ranking, on="kuyok", how="left").fillna(0)
-ranking = ranking.sort_values("points", ascending=False)
 
+ranking = (
+    base.merge(ranking, on="kuyok", how="left")
+    .fillna(0)
+    .sort_values("points", ascending=False)
+)
+
+# =========================================================
+# GLOBAL KPI
+# =========================================================
+st.subheader("📊 Vue globale")
+
+c1, c2, c3, c4 = st.columns(4)
+
+top_kyk = ranking.iloc[0]["kuyok"]
+top_points = ranking.iloc[0]["points"]
+
+total_points = ranking["points"].sum()
+
+active_kyk = len(df["kuyok"].unique()) if not df.empty else 0
+
+last_week = int(df["semaine"].max()) if not df.empty else 0
+
+c1.metric("🏆 Top KYK", top_kyk)
+c2.metric("🔥 Points Top", f"{top_points:.0f}")
+c3.metric("📈 Total Points", f"{total_points:.0f}")
+c4.metric("📅 Dernière semaine", last_week)
+
+# =========================================================
+# CLASSEMENT
+# =========================================================
 st.subheader("🏆 Classement général")
-st.dataframe(ranking, hide_index=True)
 
-# =======================
-# 🥇 TOP 3
-# =======================
-st.subheader("🥇 Top 3")
-top3 = ranking.head(3).copy()
-top3["rank"] = ["🥇","🥈","🥉"]
-st.dataframe(top3[["rank","kuyok","points"]], hide_index=True)
+st.dataframe(
+    ranking,
+    use_container_width=True,
+    hide_index=True
+)
 
-# =======================
-# 📊 GRAPH GLOBAL
-# =======================
-st.subheader("📊 Forces globales")
-st.bar_chart(ranking.set_index("kuyok")["points"])
+# =========================================================
+# DISTINCTIONS
+# =========================================================
+st.subheader("🏅 Distinctions")
 
-# =======================
-# 📈 EVOLUTION
-# =======================
-st.subheader("📈 Evolution semaine")
+def priority_score(group):
+
+    return (
+        group["Mannam Taggui"].sum() * 1000000 +
+        group["Mannam présence"].sum() * 10000 +
+        group["Fruit Mannam fixé"].sum() * 100 +
+        group["Passage sur le field"].sum()
+    )
 
 if not df.empty:
-    evo = df.groupby(["semaine","kuyok"])["points"].sum().reset_index()
-    pivot = evo.pivot(index="semaine", columns="kuyok", values="points").fillna(0)
+
+    # WEEK
+    week_df = df[df["semaine"] == last_week]
+
+    week_scores = (
+        week_df.groupby("kuyok")
+        .apply(priority_score)
+        .reset_index(name="score")
+        .sort_values("score", ascending=False)
+    )
+
+    best_week = week_scores.iloc[0]["kuyok"]
+    worst_week = week_scores.iloc[-1]["kuyok"]
+
+    # MONTH
+    current_month = df["date"].dt.month.max()
+    current_year = df["date"].dt.year.max()
+
+    month_df = df[
+        (df["date"].dt.month == current_month)
+        & (df["date"].dt.year == current_year)
+    ]
+
+    month_scores = (
+        month_df.groupby("kuyok")
+        .apply(priority_score)
+        .reset_index(name="score")
+        .sort_values("score", ascending=False)
+    )
+
+    best_month = month_scores.iloc[0]["kuyok"]
+    worst_month = month_scores.iloc[-1]["kuyok"]
+
+    a1, a2, a3, a4 = st.columns(4)
+
+    a1.success(f"🥇 Semaine : {best_week}")
+    a2.error(f"📉 Semaine : {worst_week}")
+
+    a3.success(f"🏆 Mois : {best_month}")
+    a4.error(f"⚠️ Mois : {worst_month}")
+
+# =========================================================
+# GLOBAL GRAPH
+# =========================================================
+st.subheader("📊 Forces globales")
+
+st.bar_chart(ranking.set_index("kuyok")["points"])
+
+# =========================================================
+# EVOLUTION
+# =========================================================
+st.subheader("📈 Evolution générale")
+
+if not df.empty:
+
+    evo = (
+        df.groupby(["semaine", "kuyok"])["points"]
+        .sum()
+        .reset_index()
+    )
+
+    pivot = (
+        evo.pivot(index="semaine", columns="kuyok", values="points")
+        .fillna(0)
+    )
+
     st.line_chart(pivot)
 
-# =======================
-# 🎮 RADAR KYK
-# =======================
-st.subheader("🎮 Radar KYK")
+# =========================================================
+# KYK ANALYSIS
+# =========================================================
+st.subheader("🧠 Analyse KYK")
 
-kyk = st.selectbox("Choisir KYK", all_kyk)
+selected_kyk = st.selectbox(
+    "Choisir un KYK",
+    all_kyk
+)
 
-sub = df[df["kuyok"] == kyk]
+sub = df[df["kuyok"] == selected_kyk]
 
+# =========================================================
+# KYK STATS
+# =========================================================
 stats = {c: 0 for c in weights}
+
 if not sub.empty:
     stats = {c: sub[c].sum() for c in weights}
 
-categories = ["Field","Mannam","Taggui","BB","CT","OT"]
+total = ranking[ranking["kuyok"] == selected_kyk]["points"].values[0]
+
+# =========================================================
+# KPI KYK
+# =========================================================
+k1, k2, k3, k4 = st.columns(4)
+
+k1.metric("🏆 Points", f"{total:.0f}")
+k2.metric("🔥 Taggui", int(stats["Mannam Taggui"]))
+k3.metric("👥 Présence", int(stats["Mannam présence"]))
+k4.metric("🎯 OT", int(stats["Participation OT"]))
+
+# =========================================================
+# CONVERSIONS
+# =========================================================
+st.subheader("🔄 Conversions")
+
+field_to_presence = (
+    stats["Mannam présence"] /
+    stats["Passage sur le field"] * 100
+    if stats["Passage sur le field"] > 0 else 0
+)
+
+presence_to_tag = (
+    stats["Mannam Taggui"] /
+    stats["Mannam présence"] * 100
+    if stats["Mannam présence"] > 0 else 0
+)
+
+tag_to_bb = (
+    stats["BB individuel"] /
+    stats["Mannam Taggui"] * 100
+    if stats["Mannam Taggui"] > 0 else 0
+)
+
+ct_to_ot = (
+    stats["Participation OT"] /
+    stats["CT"] * 100
+    if stats["CT"] > 0 else 0
+)
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Field → Présence", f"{field_to_presence:.1f}%")
+c2.metric("Présence → Taggui", f"{presence_to_tag:.1f}%")
+c3.metric("Taggui → BB", f"{tag_to_bb:.1f}%")
+c4.metric("CT → OT", f"{ct_to_ot:.1f}%")
+
+# =========================================================
+# ALERTS
+# =========================================================
+st.subheader("🚨 Alertes & Points d'amélioration")
+
+alerts = []
+
+if field_to_presence < 20:
+    alerts.append(
+        "⚠️ Beaucoup de field mais faible transformation en présence."
+    )
+
+if presence_to_tag < 20:
+    alerts.append(
+        "⚠️ Les présences passent peu en Taggui."
+    )
+
+if stats["Participation OT"] == 0:
+    alerts.append(
+        "⚠️ Aucune participation OT enregistrée."
+    )
+
+if stats["Mannam Taggui"] == 0:
+    alerts.append(
+        "⚠️ Aucun Taggui enregistré."
+    )
+
+# REGRESSION
+if not sub.empty:
+
+    weeks = sorted(sub["semaine"].unique())
+
+    if len(weeks) >= 2:
+
+        current_week = weeks[-1]
+        previous_week = weeks[-2]
+
+        current_pts = (
+            sub[sub["semaine"] == current_week]["points"]
+            .sum()
+        )
+
+        previous_pts = (
+            sub[sub["semaine"] == previous_week]["points"]
+            .sum()
+        )
+
+        if previous_pts > 0:
+
+            variation = (
+                (current_pts - previous_pts)
+                / previous_pts
+            ) * 100
+
+            if variation < -25:
+                alerts.append(
+                    f"🔻 Régression importante ({variation:.1f}%)."
+                )
+
+            elif variation > 25:
+                alerts.append(
+                    f"🔥 Forte progression ({variation:.1f}%)."
+                )
+
+if len(alerts) == 0:
+    st.success("✅ Aucun signal négatif détecté.")
+else:
+    for a in alerts:
+        st.warning(a)
+
+# =========================================================
+# SYNTHESIS IA
+# =========================================================
+st.subheader("🧠 Synthèse automatique")
+
+synthesis = []
+
+if stats["Passage sur le field"] > 20:
+    synthesis.append(
+        "Le KYK montre une bonne activité terrain."
+    )
+
+if field_to_presence < 20:
+    synthesis.append(
+        "Le principal point d'amélioration semble être la transformation du field en présence."
+    )
+
+if presence_to_tag > 40:
+    synthesis.append(
+        "Très bon travail de consolidation après les présences."
+    )
+
+if stats["Participation OT"] > 0:
+    synthesis.append(
+        "Le KYK participe activement aux OT."
+    )
+
+if stats["Mannam Taggui"] == 0:
+    synthesis.append(
+        "Aucun Mannam Taggui enregistré pour le moment."
+    )
+
+if len(synthesis) == 0:
+    synthesis.append(
+        "Le KYK reste stable mais manque encore de données significatives."
+    )
+
+st.info(" ".join(synthesis))
+
+# =========================================================
+# RADAR
+# =========================================================
+st.subheader("🎮 Radar")
+
+categories = [
+    "Field",
+    "Présence",
+    "Taggui",
+    "BB",
+    "CT",
+    "OT"
+]
+
 values = [
     stats["Passage sur le field"],
     stats["Mannam présence"],
@@ -189,71 +476,153 @@ values = [
 ]
 
 maxv = max(values) if max(values) > 0 else 1
-values = [v/maxv*100 for v in values]
+
+values = [v / maxv * 100 for v in values]
 
 fig = go.Figure()
-fig.add_trace(go.Scatterpolar(r=values, theta=categories, fill='toself'))
-fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])))
 
-st.plotly_chart(fig)
+fig.add_trace(
+    go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill='toself',
+        name=selected_kyk
+    )
+)
 
-# =======================
-# 🧠 PORTRAITS + CONVERSIONS
-# =======================
-st.subheader("🧠 Portrait KYK")
+fig.update_layout(
+    polar=dict(
+        radialaxis=dict(
+            visible=True,
+            range=[0, 100]
+        )
+    ),
+    showlegend=True
+)
 
-for k in all_kyk:
-    sub = df[df["kuyok"] == k]
+st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown(f"### {k}")
+# =========================================================
+# COMPARISON
+# =========================================================
+st.subheader("⚔️ Comparer deux KYK")
 
-    stats = {c: 0 for c in weights}
-    if not sub.empty:
-        stats = {c: sub[c].sum() for c in weights}
+compare_kyk = st.selectbox(
+    "Comparer avec",
+    all_kyk,
+    index=1
+)
 
-    total = ranking[ranking["kuyok"] == k]["points"].values[0]
+sub2 = df[df["kuyok"] == compare_kyk]
 
-    ot_rate = (stats["Participation OT"] / stats["Fruit Mannam fixé"] * 100) if stats["Fruit Mannam fixé"] > 0 else 0
+stats2 = {c: 0 for c in weights}
 
-    field_to_presence = (stats["Mannam présence"] / stats["Passage sur le field"] * 100) if stats["Passage sur le field"] > 0 else 0
-    presence_to_tag = (stats["Mannam Taggui"] / stats["Mannam présence"] * 100) if stats["Mannam présence"] > 0 else 0
-    tag_to_bb = (stats["BB individuel"] / stats["Mannam Taggui"] * 100) if stats["Mannam Taggui"] > 0 else 0
-    bb_to_ct = (stats["CT"] / stats["BB groupe"] * 100) if stats["BB groupe"] > 0 else 0
-    ct_to_ot = (stats["Participation OT"] / stats["CT"] * 100) if stats["CT"] > 0 else 0
+if not sub2.empty:
+    stats2 = {c: sub2[c].sum() for c in weights}
 
-    st.write(f"Total points : {total:.0f}")
-    st.write("🔄 Conversions")
-    st.write(f"Field → Presence : {field_to_presence:.1f}%")
-    st.write(f"Presence → Taggui : {presence_to_tag:.1f}%")
-    st.write(f"Taggui → BB : {tag_to_bb:.1f}%")
-    st.write(f"BB → CT : {bb_to_ct:.1f}%")
-    st.write(f"CT → OT : {ct_to_ot:.1f}%")
-    st.write(f"Mannam → OT : {ot_rate:.1f}%")
+compare_df = pd.DataFrame({
+    selected_kyk: stats,
+    compare_kyk: stats2
+})
 
-    st.bar_chart(pd.DataFrame.from_dict(stats, orient="index"))
+st.dataframe(compare_df)
 
-# =======================
-# 📊 RAW DATA
-# =======================
+# =========================================================
+# COMPARISON RADAR
+# =========================================================
+values1 = [
+    stats["Passage sur le field"],
+    stats["Mannam présence"],
+    stats["Mannam Taggui"],
+    stats["BB groupe"] + stats["BB individuel"],
+    stats["CT"],
+    stats["Participation OT"]
+]
+
+values2 = [
+    stats2["Passage sur le field"],
+    stats2["Mannam présence"],
+    stats2["Mannam Taggui"],
+    stats2["BB groupe"] + stats2["BB individuel"],
+    stats2["CT"],
+    stats2["Participation OT"]
+]
+
+maxv = max(values1 + values2)
+
+if maxv == 0:
+    maxv = 1
+
+values1 = [v / maxv * 100 for v in values1]
+values2 = [v / maxv * 100 for v in values2]
+
+fig2 = go.Figure()
+
+fig2.add_trace(go.Scatterpolar(
+    r=values1,
+    theta=categories,
+    fill='toself',
+    name=selected_kyk
+))
+
+fig2.add_trace(go.Scatterpolar(
+    r=values2,
+    theta=categories,
+    fill='toself',
+    name=compare_kyk
+))
+
+fig2.update_layout(
+    polar=dict(
+        radialaxis=dict(
+            visible=True,
+            range=[0, 100]
+        )
+    )
+)
+
+st.plotly_chart(fig2, use_container_width=True)
+
+# =========================================================
+# RAW DATA
+# =========================================================
 st.subheader("📊 Données brutes")
-st.dataframe(df)
 
-# =======================
-# ✏️ EDIT (ADMIN ONLY)
-# =======================
+st.dataframe(
+    df,
+    use_container_width=True
+)
+
+# =========================================================
+# EDIT
+# =========================================================
 if is_admin:
+
     st.subheader("✏️ Modifier une ligne")
 
     if not df.empty:
-        i = st.number_input("Index", 0, len(df)-1, 0)
+
+        i = st.number_input(
+            "Index",
+            0,
+            len(df) - 1,
+            0
+        )
+
         row = df.iloc[i]
 
         with st.form("edit"):
+
             for c in weights:
-                df.at[i, c] = st.number_input(c, value=float(row[c]))
+                df.at[i, c] = st.number_input(
+                    c,
+                    value=float(row[c])
+                )
 
             save = st.form_submit_button("Sauvegarder")
 
         if save:
+
             df.to_csv(FILE, index=False)
+
             st.success("Modifié ✔️")
