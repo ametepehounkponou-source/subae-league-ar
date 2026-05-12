@@ -7,12 +7,12 @@ st.set_page_config(page_title="Subae League AR")
 
 st.title("🏆 Subae League AR - Pro Dashboard")
 
-# -----------------------
-# USERS (LOGIN SYSTEM)
-# -----------------------
+# =======================
+# 🔐 LOGIN SYSTEM
+# =======================
 USERS = {
-    "admin": {"password": "admin123", "role": "admin"},
-    "viewer": {"password": "viewer123", "role": "viewer"}
+    "admin": {"password": "Kakashisensei90", "role": "admin"},
+    "Membre": {"password": "SubaeleagueAR", "role": "viewer"}
 }
 
 if "auth" not in st.session_state:
@@ -28,7 +28,7 @@ if st.sidebar.button("Login"):
     if username in USERS and USERS[username]["password"] == password:
         st.session_state.auth = True
         st.session_state.role = USERS[username]["role"]
-        st.success(f"Connecté en tant que {username} ({st.session_state.role})")
+        st.success(f"Connecté en tant que {username}")
     else:
         st.error("Login incorrect")
 
@@ -37,9 +37,9 @@ if not st.session_state.auth:
 
 is_admin = st.session_state.role == "admin"
 
-# -----------------------
-# DATA
-# -----------------------
+# =======================
+# 📁 DATA
+# =======================
 FILE = "resultats.csv"
 
 if os.path.exists(FILE):
@@ -72,9 +72,9 @@ weights = {
     "Participation OT": 500
 }
 
-# -----------------------
-# ADD RESULT (ADMIN ONLY)
-# -----------------------
+# =======================
+# ➕ ADD RESULT (ADMIN ONLY)
+# =======================
 if is_admin:
     st.subheader("➕ Ajouter un résultat")
 
@@ -116,23 +116,22 @@ if is_admin:
         df.to_csv(FILE, index=False)
         st.success("Ajouté ✔️")
 
-# -----------------------
-# CALCUL POINTS
-# -----------------------
+# =======================
+# 🧮 POINTS
+# =======================
 def calc(row):
     return sum(float(row.get(k, 0)) * v for k, v in weights.items())
 
 if not df.empty:
     for c in weights.keys():
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-
     df["points"] = df.apply(calc, axis=1)
 else:
     df["points"] = 0
 
-# -----------------------
-# CLASSEMENT
-# -----------------------
+# =======================
+# 🏆 CLASSEMENT
+# =======================
 base = pd.DataFrame({"kuyok": all_kyk})
 
 ranking = df.groupby("kuyok")["points"].sum().reset_index()
@@ -142,23 +141,23 @@ ranking = ranking.sort_values("points", ascending=False)
 st.subheader("🏆 Classement général")
 st.dataframe(ranking, hide_index=True)
 
-# -----------------------
-# TOP 3
-# -----------------------
+# =======================
+# 🥇 TOP 3
+# =======================
 st.subheader("🥇 Top 3")
 top3 = ranking.head(3).copy()
 top3["rank"] = ["🥇","🥈","🥉"]
 st.dataframe(top3[["rank","kuyok","points"]], hide_index=True)
 
-# -----------------------
-# GLOBAL GRAPH
-# -----------------------
+# =======================
+# 📊 GRAPH GLOBAL
+# =======================
 st.subheader("📊 Forces globales")
 st.bar_chart(ranking.set_index("kuyok")["points"])
 
-# -----------------------
-# EVOLUTION
-# -----------------------
+# =======================
+# 📈 EVOLUTION
+# =======================
 st.subheader("📈 Evolution semaine")
 
 if not df.empty:
@@ -166,9 +165,9 @@ if not df.empty:
     pivot = evo.pivot(index="semaine", columns="kuyok", values="points").fillna(0)
     st.line_chart(pivot)
 
-# -----------------------
-# RADAR (FIFA STYLE)
-# -----------------------
+# =======================
+# 🎮 RADAR KYK
+# =======================
 st.subheader("🎮 Radar KYK")
 
 kyk = st.selectbox("Choisir KYK", all_kyk)
@@ -176,7 +175,6 @@ kyk = st.selectbox("Choisir KYK", all_kyk)
 sub = df[df["kuyok"] == kyk]
 
 stats = {c: 0 for c in weights}
-
 if not sub.empty:
     stats = {c: sub[c].sum() for c in weights}
 
@@ -199,9 +197,9 @@ fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])))
 
 st.plotly_chart(fig)
 
-# -----------------------
-# PORTRAIT KYK + CONVERSIONS
-# -----------------------
+# =======================
+# 🧠 PORTRAITS + CONVERSIONS
+# =======================
 st.subheader("🧠 Portrait KYK")
 
 for k in all_kyk:
@@ -213,7 +211,7 @@ for k in all_kyk:
     if not sub.empty:
         stats = {c: sub[c].sum() for c in weights}
 
-    total = ranking[ranking["kuyok"] == k]["points"].values[0] if k in ranking["kuyok"].values else 0
+    total = ranking[ranking["kuyok"] == k]["points"].values[0]
 
     ot_rate = (stats["Participation OT"] / stats["Fruit Mannam fixé"] * 100) if stats["Fruit Mannam fixé"] > 0 else 0
 
@@ -224,8 +222,6 @@ for k in all_kyk:
     ct_to_ot = (stats["Participation OT"] / stats["CT"] * 100) if stats["CT"] > 0 else 0
 
     st.write(f"Total points : {total:.0f}")
-    st.write(f"Type analyse basé sur performance")
-
     st.write("🔄 Conversions")
     st.write(f"Field → Presence : {field_to_presence:.1f}%")
     st.write(f"Presence → Taggui : {presence_to_tag:.1f}%")
@@ -236,15 +232,15 @@ for k in all_kyk:
 
     st.bar_chart(pd.DataFrame.from_dict(stats, orient="index"))
 
-# -----------------------
-# DATA
-# -----------------------
+# =======================
+# 📊 RAW DATA
+# =======================
 st.subheader("📊 Données brutes")
 st.dataframe(df)
 
-# -----------------------
-# EDIT (ADMIN ONLY)
-# -----------------------
+# =======================
+# ✏️ EDIT (ADMIN ONLY)
+# =======================
 if is_admin:
     st.subheader("✏️ Modifier une ligne")
 
