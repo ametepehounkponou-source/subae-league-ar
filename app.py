@@ -6,11 +6,11 @@ st.set_page_config(page_title="Subae League AR")
 
 st.title("🏆 Subae League AR")
 
-# -----------------------
-# FICHIERS
-# -----------------------
 FILE = "resultats.csv"
 
+# -----------------------
+# INITIALISATION CSV
+# -----------------------
 if os.path.exists(FILE):
     resultats = pd.read_csv(FILE)
 else:
@@ -43,15 +43,14 @@ points_map = {
 }
 
 # -----------------------
-# FORMULAIRE D'AJOUT
+# FORMULAIRE AJOUT
 # -----------------------
 st.subheader("➕ Ajouter un résultat")
 
-with st.form("form"):
-    date = st.text_input("Date (YYYY-MM-DD)")
+with st.form("add"):
+    date = st.text_input("Date")
     semaine = st.number_input("Semaine", step=1)
-
-    kuyok = st.text_input("Kuyok (ex: KYK2)")
+    kuyok = st.text_input("Kuyok")
 
     field = st.number_input("Passage sur le field", step=1)
     fruit = st.number_input("Fruit Mannam fixé", step=1)
@@ -66,7 +65,7 @@ with st.form("form"):
     submit = st.form_submit_button("Ajouter")
 
     if submit:
-        new_row = {
+        new = {
             "date": date,
             "semaine": semaine,
             "kuyok": kuyok,
@@ -81,9 +80,46 @@ with st.form("form"):
             "Participation OT": ot
         }
 
-        resultats = pd.concat([resultats, pd.DataFrame([new_row])], ignore_index=True)
+        resultats = pd.concat([resultats, pd.DataFrame([new])], ignore_index=True)
         resultats.to_csv(FILE, index=False)
         st.success("Résultat ajouté ✔️")
+
+# -----------------------
+# EDITION D'UN RESULTAT
+# -----------------------
+st.subheader("✏️ Modifier un résultat")
+
+if not resultats.empty:
+    index = st.number_input("Index de la ligne à modifier", min_value=0, max_value=len(resultats)-1, step=1)
+
+    row = resultats.iloc[index]
+
+    with st.form("edit"):
+        field = st.number_input("Passage sur le field", value=int(row["Passage sur le field"]))
+        fruit = st.number_input("Fruit Mannam fixé", value=int(row["Fruit Mannam fixé"]))
+        autres = st.number_input("Autres fruits", value=int(row["Autres fruits (NTF, EM, etc.)"]))
+        presence = st.number_input("Mannam présence", value=int(row["Mannam présence"]))
+        taggui = st.number_input("Mannam Taggui", value=int(row["Mannam Taggui"]))
+        bb_ind = st.number_input("BB individuel", value=int(row["BB individuel"]))
+        bb_group = st.number_input("BB groupe", value=int(row["BB groupe"]))
+        ct = st.number_input("CT", value=int(row["CT"]))
+        ot = st.number_input("Participation OT", value=int(row["Participation OT"]))
+
+        save = st.form_submit_button("Modifier")
+
+        if save:
+            resultats.at[index, "Passage sur le field"] = field
+            resultats.at[index, "Fruit Mannam fixé"] = fruit
+            resultats.at[index, "Autres fruits (NTF, EM, etc.)"] = autres
+            resultats.at[index, "Mannam présence"] = presence
+            resultats.at[index, "Mannam Taggui"] = taggui
+            resultats.at[index, "BB individuel"] = bb_ind
+            resultats.at[index, "BB groupe"] = bb_group
+            resultats.at[index, "CT"] = ct
+            resultats.at[index, "Participation OT"] = ot
+
+            resultats.to_csv(FILE, index=False)
+            st.success("Résultat modifié ✔️")
 
 # -----------------------
 # CALCUL POINTS
@@ -100,14 +136,26 @@ if not resultats.empty:
 
     resultats["points"] = resultats.apply(calc, axis=1)
 
+# -----------------------
+# CLASSEMENT COMPLET (TOUS KYK MÊME À 0)
+# -----------------------
+all_kyk = [f"KYK{i}" for i in range(1, 19)]
+base = pd.DataFrame({"kuyok": all_kyk})
+
+if not resultats.empty:
     classement = resultats.groupby("kuyok")["points"].sum().reset_index()
-    classement = classement.sort_values("points", ascending=False)
+    classement = base.merge(classement, on="kuyok", how="left").fillna(0)
+else:
+    classement = base
+    classement["points"] = 0
 
-    st.subheader("🏆 Classement général")
-    st.dataframe(classement)
+classement = classement.sort_values("points", ascending=False)
+
+st.subheader("🏆 Classement général")
+st.dataframe(classement)
 
 # -----------------------
-# DONNÉES BRUTES
+# DONNÉES
 # -----------------------
-st.subheader("📊 Résultats enregistrés")
+st.subheader("📊 Résultats")
 st.dataframe(resultats)
