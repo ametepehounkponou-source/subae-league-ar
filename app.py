@@ -5,7 +5,9 @@ st.set_page_config(page_title="Subae League AR")
 
 st.title("🏆 Subae League AR")
 
-# fichiers
+# -----------------------
+# LECTURE DES FICHIERS
+# -----------------------
 matchs = pd.read_csv("matchs.csv")
 
 try:
@@ -13,10 +15,15 @@ try:
 except:
     resultats = pd.DataFrame()
 
+# -----------------------
+# AFFICHAGE MATCHS
+# -----------------------
 st.subheader("📅 Journée 1")
 st.dataframe(matchs)
 
-# BARÈME
+# -----------------------
+# BARÈME OFFICIEL
+# -----------------------
 points_map = {
     "Passage sur le field": 1,
     "Fruit Mannam fixé": 5,
@@ -29,20 +36,33 @@ points_map = {
     "Participation OT": 500
 }
 
-# calcul
-def calc(row):
-    total = 0
-    for k, v in points_map.items():
-        total += row.get(k, 0) * v
-    return total
-
+# -----------------------
+# CONVERSION EN NOMBRES (IMPORTANT)
+# -----------------------
 if not resultats.empty:
+    for col in points_map.keys():
+        if col in resultats.columns:
+            resultats[col] = pd.to_numeric(resultats[col], errors="coerce").fillna(0)
+
+    # -----------------------
+    # CALCUL POINTS
+    # -----------------------
+    def calc(row):
+        total = 0
+        for k, v in points_map.items():
+            total += float(row.get(k, 0)) * v
+        return total
+
     resultats["points"] = resultats.apply(calc, axis=1)
 
+    # -----------------------
+    # CLASSEMENT
+    # -----------------------
     classement = resultats.groupby("kuyok")["points"].sum().reset_index()
     classement = classement.sort_values("points", ascending=False)
 
-    st.subheader("🏆 Classement")
+    st.subheader("🏆 Classement général")
     st.dataframe(classement)
+
 else:
-    st.info("Aucun résultat encore")
+    st.warning("Aucun résultat pour le moment")
