@@ -43,24 +43,27 @@ cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS resultats (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-date TEXT,
-semaine INTEGER,
-kuyok TEXT,
-field INTEGER,
-fruit INTEGER,
-autres INTEGER,
-presence INTEGER,
-taggui INTEGER,
-bb_ind INTEGER,
-bb_group INTEGER,
-ct INTEGER,
-ot INTEGER
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    semaine INTEGER,
+    kuyok TEXT,
+    field INTEGER DEFAULT 0,
+    fruit INTEGER DEFAULT 0,
+    autres INTEGER DEFAULT 0,
+    presence INTEGER DEFAULT 0,
+    taggui INTEGER DEFAULT 0,
+    bb_ind INTEGER DEFAULT 0,
+    bb_group INTEGER DEFAULT 0,
+    ct INTEGER DEFAULT 0,
+    ot INTEGER DEFAULT 0
 )
 """)
 
 conn.commit()
 
+# =========================================================
+# LOAD DATA
+# =========================================================
 df = pd.read_sql_query("SELECT * FROM resultats", conn)
 
 # =========================================================
@@ -69,21 +72,43 @@ df = pd.read_sql_query("SELECT * FROM resultats", conn)
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # =========================================================
-# CLEAN + POINTS
+# CLEAN DATA
 # =========================================================
+numeric_cols = [
+    "field",
+    "fruit",
+    "autres",
+    "presence",
+    "taggui",
+    "bb_ind",
+    "bb_group",
+    "ct",
+    "ot"
+]
+
 if not df.empty:
-    for c in ["field","fruit","autres","presence","taggui","bb_ind","bb_group","ct","ot"]:
+
+    for c in numeric_cols:
+        if c not in df.columns:
+            df[c] = 0
+
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
+    # =====================================================
+    # CALCUL DES POINTS
+    # =====================================================
     df["points"] = (
         df["field"] * 1 +
         df["fruit"] * 5 +
+        df["autres"] * 2 +
         df["presence"] * 10 +
         df["taggui"] * 20 +
+        df["bb_ind"] * 50 +
         df["bb_group"] * 100 +
         df["ct"] * 200 +
         df["ot"] * 500
     )
+
 else:
     df["points"] = 0
 
@@ -104,12 +129,22 @@ page = st.sidebar.radio("Menu", [
 ])
 
 # =========================================================
-# BASE RANKING (GLOBAL)
+# BASE RANKING
 # =========================================================
 base = pd.DataFrame({"kuyok": all_kyk})
 
 ranking = df.groupby("kuyok")["points"].sum().reset_index()
-ranking = base.merge(ranking, on="kuyok", how="left").fillna(0)
+
+ranking = base.merge(
+    ranking,
+    on="kuyok",
+    how="left"
+).fillna(0)
+
+ranking = ranking.sort_values(
+    by="points",
+    ascending=False
+)
 
 # =========================================================
 # 📊 DASHBOARD
@@ -120,7 +155,7 @@ if page == "📊 Dashboard":
 
     st.bar_chart(ranking.set_index("kuyok"))
 
-    st.dataframe(ranking)
+    st.dataframe(ranking, use_container_width=True)
 
 # =========================================================
 # 🧠 KYK ANALYZER
@@ -128,6 +163,7 @@ if page == "📊 Dashboard":
 elif page == "🧠 KYK Analyzer":
 
     k = st.selectbox("KYK", all_kyk)
+
     sub = df[df["kuyok"] == k]
 
     st.subheader(k)
@@ -135,7 +171,18 @@ elif page == "🧠 KYK Analyzer":
     if sub.empty:
         st.info("Aucune donnée")
     else:
-        st.write(sub.sum(numeric_only=True))
+
+        total_points = sub["points"].sum()
+
+        st.metric("Total Points", int(total_points))
+
+        st.write("### Activités cumulées")
+
+        st.write(sub[numeric_cols].sum())
+
+        st.write("### Historique")
+
+        st.dataframe(sub, use_container_width=True)
 
 # =========================================================
 # 🚨 ALERTES
@@ -147,18 +194,26 @@ elif page == "🚨 Alertes":
     alerts = []
 
     for k in all_kyk:
+
         sub = df[df["kuyok"] == k]
 
         if sub.empty:
+
             alerts.append((k, "😴 Aucun activité"))
+
         elif sub["taggui"].sum() < 3:
-            alerts.append((k, "⚠️ faible consolidation"))
+
+            alerts.append((k, "⚠️ Faible consolidation"))
+
         elif sub["field"].sum() > 20 and sub["taggui"].sum() < 5:
-            alerts.append((k, "⚠️ inefficacité field"))
+
+            alerts.append((k, "⚠️ Inefficacité field"))
+
         else:
+
             alerts.append((k, "🟢 OK"))
 
-    st.table(pd.DataFrame(alerts, columns=["KYK","Status"]))
+    st.table(pd.DataFrame(alerts, columns=["KYK", "Status"]))
 
 # =========================================================
 # 🩺 SANTÉ KYK
@@ -170,20 +225,29 @@ elif page == "🩺 Santé KYK":
     health = []
 
     for k in all_kyk:
+
         sub = df[df["kuyok"] == k]
+
+        total = sub["points"].sum()
 
         if sub.empty:
             state = "🔴 Inactif"
-        elif sub["points"].sum() > 500:
+
+        elif total >= 500:
             state = "🟢 Excellent"
-        elif sub["points"].sum() > 200:
+
+        elif total >= 200:
             state = "🟠 Moyen"
+
         else:
             state = "🔴 Faible"
 
-        health.append((k, state))
+        health.append((k, state, int(total)))
 
-    st.table(pd.DataFrame(health, columns=["KYK","Etat"]))
+    st.table(pd.DataFrame(
+        health,
+        columns=["KYK", "Etat", "Points"]
+    ))
 
 # =========================================================
 # 📈 FUNNEL
@@ -192,15 +256,28 @@ elif page == "📈 Funnel":
 
     st.subheader("Pipeline évangélisation")
 
-    st.write("""
-    Field ↓
-    Fruit ↓
-    Présence ↓
-    Taggui ↓
-    BB ↓
-    CT ↓
-    OT
-    """)
+    funnel = {
+        "Field": int(df["field"].sum()),
+        "Fruit Mannam": int(df["fruit"].sum()),
+        "Autres Fruits": int(df["autres"].sum()),
+        "Présence": int(df["presence"].sum()),
+        "Taggui": int(df["taggui"].sum()),
+        "BB Individuel": int(df["bb_ind"].sum()),
+        "BB Groupe": int(df["bb_group"].sum()),
+        "CT": int(df["ct"].sum()),
+        "OT": int(df["ot"].sum())
+    }
+
+    funnel_df = pd.DataFrame(
+        funnel.items(),
+        columns=["Étape", "Total"]
+    )
+
+    st.dataframe(funnel_df, use_container_width=True)
+
+    st.bar_chart(
+        funnel_df.set_index("Étape")
+    )
 
 # =========================================================
 # 🎯 OBJECTIFS
@@ -209,16 +286,18 @@ elif page == "🎯 Objectifs":
 
     st.subheader("Objectifs KYK")
 
-    st.write("À développer KPI par KPI")
+    st.info("Module KPI évolutif à développer")
 
 # =========================================================
 # 📅 HISTORIQUE
 # =========================================================
 elif page == "📅 Historique":
 
-    st.subheader("Évolution")
+    st.subheader("Historique des performances")
 
-    st.line_chart(ranking.set_index("kuyok"))
+    history = df.groupby("semaine")["points"].sum()
+
+    st.line_chart(history)
 
 # =========================================================
 # ⚔️ COMPARAISON
@@ -228,14 +307,20 @@ elif page == "⚔️ Comparaison":
     a = st.selectbox("KYK A", all_kyk)
     b = st.selectbox("KYK B", all_kyk)
 
-    st.write(ranking[ranking["kuyok"].isin([a,b])])
+    compare = ranking[
+        ranking["kuyok"].isin([a, b])
+    ]
+
+    st.dataframe(compare, use_container_width=True)
 
 # =========================================================
 # 📂 DONNÉES
 # =========================================================
 elif page == "📂 Données":
 
-    st.dataframe(df)
+    st.subheader("Base de données")
+
+    st.dataframe(df, use_container_width=True)
 
 # =========================================================
 # ⚙️ ADMIN
@@ -243,31 +328,89 @@ elif page == "📂 Données":
 elif page == "⚙️ Admin":
 
     if not is_admin:
+
         st.error("Accès refusé")
 
     else:
 
-        st.subheader("Ajout données")
+        st.subheader("Ajout données KYK")
 
         with st.form("add"):
 
             date = st.date_input("Date")
-            semaine = st.number_input("Semaine", step=1)
+
+            semaine = st.number_input(
+                "Semaine",
+                min_value=1,
+                step=1
+            )
+
             k = st.selectbox("KYK", all_kyk)
 
-            field = st.number_input("Field", step=1)
-            fruit = st.number_input("Fruit", step=1)
-            presence = st.number_input("Presence", step=1)
-            taggui = st.number_input("Taggui", step=1)
+            st.markdown("## Activités")
+
+            field = st.checkbox("Passage sur le Field (+1)")
+            fruit = st.checkbox("Fruit Mannam (+5)")
+            autres = st.checkbox("Autres Fruits (+2)")
+            presence = st.checkbox("Mannam Présence (+10)")
+            taggui = st.checkbox("Mannam Taggui (+20)")
+            bb_ind = st.checkbox("BB Individuel (+50)")
+            bb_group = st.checkbox("BB Groupe (+100)")
+            ct = st.checkbox("CT (+200)")
+            ot = st.checkbox("Participation OT (+500)")
 
             submit = st.form_submit_button("Ajouter")
 
         if submit:
+
+            # =================================================
+            # CALCUL AUTO DES POINTS
+            # =================================================
+            points = (
+                int(field) * 1 +
+                int(fruit) * 5 +
+                int(autres) * 2 +
+                int(presence) * 10 +
+                int(taggui) * 20 +
+                int(bb_ind) * 50 +
+                int(bb_group) * 100 +
+                int(ct) * 200 +
+                int(ot) * 500
+            )
+
             cursor.execute("""
-            INSERT INTO resultats (date,semaine,kuyok,field,fruit,presence,taggui,bb_ind,bb_group,ct,ot)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-            """, (str(date),semaine,k,field,fruit,presence,taggui,0,0,0,0))
+            INSERT INTO resultats (
+                date,
+                semaine,
+                kuyok,
+                field,
+                fruit,
+                autres,
+                presence,
+                taggui,
+                bb_ind,
+                bb_group,
+                ct,
+                ot
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                str(date),
+                int(semaine),
+                k,
+                int(field),
+                int(fruit),
+                int(autres),
+                int(presence),
+                int(taggui),
+                int(bb_ind),
+                int(bb_group),
+                int(ct),
+                int(ot)
+            ))
 
             conn.commit()
 
-            st.success("Ajouté")
+            st.success(f"✅ Données ajoutées | Total points : {points}")
+
+            st.rerun()
