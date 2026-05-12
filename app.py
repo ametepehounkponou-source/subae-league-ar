@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import os
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Subae League AR")
 
-st.title("🏆 Subae League AR - Analytics Dashboard")
+st.title("🏆 Subae League AR - FIFA Radar Edition")
 
 FILE = "resultats.csv"
 
@@ -27,9 +28,6 @@ else:
         "Participation OT"
     ])
 
-# -----------------------
-# KYK LIST
-# -----------------------
 all_kyk = [f"KYK{i}" for i in range(1, 19)]
 
 # -----------------------
@@ -48,58 +46,13 @@ weights = {
 }
 
 # -----------------------
-# ADD RESULT
-# -----------------------
-st.subheader("➕ Ajouter un résultat")
-
-with st.form("add"):
-    date = st.text_input("Date")
-    semaine = st.number_input("Semaine", step=1)
-    kuyok = st.selectbox("KYK", all_kyk)
-
-    field = st.number_input("Passage sur le field", step=1)
-    fruit = st.number_input("Fruit Mannam fixé", step=1)
-    autres = st.number_input("Autres fruits", step=1)
-    presence = st.number_input("Mannam présence", step=1)
-    taggui = st.number_input("Mannam Taggui", step=1)
-    bb_ind = st.number_input("BB individuel", step=1)
-    bb_group = st.number_input("BB groupe", step=1)
-    ct = st.number_input("CT", step=1)
-    ot = st.number_input("Participation OT", step=1)
-
-    submit = st.form_submit_button("Ajouter")
-
-if submit:
-    new = {
-        "date": date,
-        "semaine": semaine,
-        "kuyok": kuyok,
-        "Passage sur le field": field,
-        "Fruit Mannam fixé": fruit,
-        "Autres fruits (NTF, EM, etc.)": autres,
-        "Mannam présence": presence,
-        "Mannam Taggui": taggui,
-        "BB individuel": bb_ind,
-        "BB groupe": bb_group,
-        "CT": ct,
-        "Participation OT": ot
-    }
-
-    df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
-    df.to_csv(FILE, index=False)
-    st.success("Ajouté ✔️")
-
-# -----------------------
-# CALC POINTS
+# CALCUL GLOBAL
 # -----------------------
 def calc(row):
-    total = 0
-    for k, v in weights.items():
-        total += float(row.get(k, 0)) * v
-    return total
+    return sum(float(row.get(k,0))*v for k,v in weights.items())
 
 if not df.empty:
-    for c in weights.keys():
+    for c in weights:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
     df["points"] = df.apply(calc, axis=1)
@@ -107,76 +60,63 @@ else:
     df["points"] = 0
 
 # -----------------------
-# CLASSEMENT GLOBAL
+# CLASSEMENT
 # -----------------------
 base = pd.DataFrame({"kuyok": all_kyk})
-
 ranking = df.groupby("kuyok")["points"].sum().reset_index()
 ranking = base.merge(ranking, on="kuyok", how="left").fillna(0)
-ranking = ranking.sort_values("points", ascending=False)
 
-st.subheader("🏆 Classement général")
-st.dataframe(ranking, hide_index=True)
-
-# -----------------------
-# TOP 3
-# -----------------------
-st.subheader("🥇 Top 3")
-top3 = ranking.head(3).copy()
-top3["rank"] = ["🥇","🥈","🥉"]
-st.dataframe(top3[["rank","kuyok","points"]], hide_index=True)
+st.subheader("🏆 Classement")
+st.dataframe(ranking.sort_values("points", ascending=False), hide_index=True)
 
 # -----------------------
-# GLOBAL CHART
+# 🔥 RADAR FIFA
 # -----------------------
-st.subheader("📊 Forces globales")
-st.bar_chart(ranking.set_index("kuyok")["points"])
+st.subheader("🎮 Radar FIFA des KYK")
 
-# -----------------------
-# EVOLUTION
-# -----------------------
-st.subheader("📈 Evolution semaine")
+kyk = st.selectbox("Choisir un KYK", all_kyk)
 
-if not df.empty:
-    evo = df.groupby(["semaine","kuyok"])["points"].sum().reset_index()
-    pivot = evo.pivot(index="semaine", columns="kuyok", values="points").fillna(0)
-    st.line_chart(pivot)
+sub = df[df["kuyok"] == kyk]
 
-# -----------------------
-# PORTRAIT KYK
-# -----------------------
-st.subheader("🧠 Portrait KYK")
+if sub.empty:
+    st.info("Aucune donnée pour ce KYK")
+else:
+    stats = {
+        "Field": sub["Passage sur le field"].sum(),
+        "Mannam": sub["Mannam présence"].sum(),
+        "Taggui": sub["Mannam Taggui"].sum(),
+        "BB": sub["BB groupe"].sum() + sub["BB individuel"].sum(),
+        "CT": sub["CT"].sum(),
+        "OT": sub["Participation OT"].sum()
+    }
 
-for k in all_kyk:
-    sub = df[df["kuyok"] == k]
+    categories = list(stats.keys())
+    values = list(stats.values())
 
-    st.markdown(f"### {k}")
+    # normalisation (0-100 pour radar propre)
+    max_val = max(values) if max(values) > 0 else 1
+    values_norm = [v/max_val*100 for v in values]
 
-    if sub.empty:
-        st.info("Aucune donnée")
-        continue
+    fig = go.Figure()
 
-    stats = {c: sub[c].sum() for c in weights.keys()}
+    fig.add_trace(go.Scatterpolar(
+        r=values_norm,
+        theta=categories,
+        fill='toself',
+        name=kyk
+    ))
 
-    total = sum(stats.values())
-    ot_rate = (stats["Participation OT"] / stats["Fruit Mannam fixé"] * 100) if stats["Fruit Mannam fixé"] > 0 else 0
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0,100])
+        ),
+        showlegend=False
+    )
 
-    # TYPE KYK
-    if stats["CT"] > stats["BB groupe"] and stats["CT"] > stats["Mannam présence"]:
-        typ = "🧠 KYK impact"
-    elif stats["Passage sur le field"] + stats["Mannam présence"] > stats["BB individuel"]:
-        typ = "🧱 KYK terrain"
-    else:
-        typ = "⚡ KYK équilibré"
-
-    st.write(f"Type : {typ}")
-    st.write(f"Total points : {ranking[ranking['kuyok']==k]['points'].values[0] if k in ranking['kuyok'].values else 0:.0f}")
-    st.write(f"Taux conversion Mannam → OT : {ot_rate:.1f}%")
-
-    st.bar_chart(pd.DataFrame.from_dict(stats, orient="index"))
+    st.plotly_chart(fig)
 
 # -----------------------
-# RAW DATA
+# GLOBAL DATA
 # -----------------------
 st.subheader("📊 Données brutes")
 st.dataframe(df)
