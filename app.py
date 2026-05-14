@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
+from supabase import create_client
 
 # =========================================================
 # CONFIG
@@ -11,6 +11,17 @@ st.set_page_config(
 )
 
 st.title("🏆 KYK Intelligence System")
+
+# =========================================================
+# SUPABASE CONFIG
+# =========================================================
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
 
 # =========================================================
 # LOGIN SYSTEM
@@ -47,6 +58,7 @@ if st.sidebar.button("Login"):
         st.sidebar.success("✅ Connexion réussie")
 
     else:
+
         st.sidebar.error("❌ Erreur login")
 
 if not st.session_state.auth:
@@ -65,45 +77,18 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 # =========================================================
-# DATABASE
-# =========================================================
-conn = sqlite3.connect(
-    "subae.db",
-    check_same_thread=False
-)
-
-cursor = conn.cursor()
-
-# =========================================================
-# CREATE TABLE
-# =========================================================
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS resultats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    semaine INTEGER,
-    kuyok TEXT,
-    field INTEGER DEFAULT 0,
-    fruit INTEGER DEFAULT 0,
-    autres INTEGER DEFAULT 0,
-    presence INTEGER DEFAULT 0,
-    taggui INTEGER DEFAULT 0,
-    bb_ind INTEGER DEFAULT 0,
-    bb_group INTEGER DEFAULT 0,
-    ct INTEGER DEFAULT 0,
-    ot INTEGER DEFAULT 0
-)
-""")
-
-conn.commit()
-
-# =========================================================
 # LOAD DATA
 # =========================================================
-df = pd.read_sql_query(
-    "SELECT * FROM resultats",
-    conn
-)
+@st.cache_data(ttl=5)
+def load_data():
+
+    response = supabase.table(
+        "resultats"
+    ).select("*").execute()
+
+    return pd.DataFrame(response.data)
+
+df = load_data()
 
 # =========================================================
 # KYK LIST
@@ -126,35 +111,42 @@ numeric_cols = [
 ]
 
 # =========================================================
+# EMPTY DATAFRAME SAFETY
+# =========================================================
+if df.empty:
+
+    df = pd.DataFrame(columns=[
+        "id",
+        "date",
+        "semaine",
+        "kuyok",
+        *numeric_cols
+    ])
+
+# =========================================================
 # CLEAN + POINTS
 # =========================================================
-if not df.empty:
+for c in numeric_cols:
 
-    for c in numeric_cols:
+    if c not in df.columns:
+        df[c] = 0
 
-        if c not in df.columns:
-            df[c] = 0
+    df[c] = pd.to_numeric(
+        df[c],
+        errors="coerce"
+    ).fillna(0)
 
-        df[c] = pd.to_numeric(
-            df[c],
-            errors="coerce"
-        ).fillna(0)
-
-    df["points"] = (
-        df["field"] * 1 +
-        df["fruit"] * 5 +
-        df["autres"] * 2 +
-        df["presence"] * 10 +
-        df["taggui"] * 20 +
-        df["bb_ind"] * 50 +
-        df["bb_group"] * 100 +
-        df["ct"] * 200 +
-        df["ot"] * 500
-    )
-
-else:
-
-    df["points"] = 0
+df["points"] = (
+    df["field"] * 1 +
+    df["fruit"] * 5 +
+    df["autres"] * 2 +
+    df["presence"] * 10 +
+    df["taggui"] * 20 +
+    df["bb_ind"] * 50 +
+    df["bb_group"] * 100 +
+    df["ct"] * 200 +
+    df["ot"] * 500
+)
 
 # =========================================================
 # LABEL FOR EDIT / DELETE
@@ -441,6 +433,15 @@ elif page == "📂 Données":
         use_container_width=True
     )
 
+    csv = df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        "📥 Télécharger sauvegarde CSV",
+        csv,
+        "backup_kys.csv",
+        "text/csv"
+    )
+
 # =========================================================
 # ADMIN
 # =========================================================
@@ -507,12 +508,12 @@ elif page == "⚙️ Admin":
                 )
 
                 st.info(f"""
-                👤 KYK : {k}
+👤 KYK : {k}
 
-                📅 Date : {date}
+📅 Date : {date}
 
-                🏆 Points : {points}
-                """)
+🏆 Points : {points}
+""")
 
                 confirm_add = st.checkbox(
                     "✅ Je confirme l'ajout"
@@ -538,48 +539,32 @@ elif page == "⚙️ Admin":
 
                 else:
 
-                    cursor.execute("""
-                    INSERT INTO resultats (
-                        date,
-                        semaine,
-                        kuyok,
-                        field,
-                        fruit,
-                        autres,
-                        presence,
-                        taggui,
-                        bb_ind,
-                        bb_group,
-                        ct,
-                        ot
-                    )
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-                    """, (
-                        str(date),
-                        int(semaine),
-                        k,
-                        int(field),
-                        int(fruit),
-                        int(autres),
-                        int(presence),
-                        int(taggui),
-                        int(bb_ind),
-                        int(bb_group),
-                        int(ct),
-                        int(ot)
-                    ))
-
-                    conn.commit()
+                    supabase.table("resultats").insert({
+                        "date": str(date),
+                        "semaine": int(semaine),
+                        "kuyok": k,
+                        "field": int(field),
+                        "fruit": int(fruit),
+                        "autres": int(autres),
+                        "presence": int(presence),
+                        "taggui": int(taggui),
+                        "bb_ind": int(bb_ind),
+                        "bb_group": int(bb_group),
+                        "ct": int(ct),
+                        "ot": int(ot)
+                    }).execute()
 
                     st.success(f"""
-                    ✅ Données ajoutées avec succès !
+✅ Données ajoutées avec succès !
 
-                    👤 KYK : {k}
+👤 KYK : {k}
 
-                    🏆 Points enregistrés : {points}
-                    """)
+🏆 Points enregistrés : {points}
+""")
 
                     st.balloons()
+
+                    st.cache_data.clear()
 
                     st.rerun()
 
@@ -670,22 +655,6 @@ elif page == "⚙️ Admin":
                         value=int(row["ot"])
                     )
 
-                    edit_points = (
-                        edit_field * 1 +
-                        edit_fruit * 5 +
-                        edit_autres * 2 +
-                        edit_presence * 10 +
-                        edit_taggui * 20 +
-                        edit_bb_ind * 50 +
-                        edit_bb_group * 100 +
-                        edit_ct * 200 +
-                        edit_ot * 500
-                    )
-
-                    st.info(f"""
-                    🏆 Nouveau total : {edit_points} points
-                    """)
-
                     confirm_update = st.checkbox(
                         "✅ Je confirme la modification"
                     )
@@ -699,50 +668,36 @@ elif page == "⚙️ Admin":
                     if not confirm_update:
 
                         st.error(
-                            "❌ Veuillez confirmer la modification"
+                            "❌ Veuillez confirmer"
                         )
 
                     else:
 
-                        cursor.execute("""
-                        UPDATE resultats
-                        SET
-                            date=?,
-                            semaine=?,
-                            kuyok=?,
-                            field=?,
-                            fruit=?,
-                            autres=?,
-                            presence=?,
-                            taggui=?,
-                            bb_ind=?,
-                            bb_group=?,
-                            ct=?,
-                            ot=?
-                        WHERE id=?
-                        """, (
-                            edit_date,
-                            int(edit_semaine),
-                            edit_k,
-                            int(edit_field),
-                            int(edit_fruit),
-                            int(edit_autres),
-                            int(edit_presence),
-                            int(edit_taggui),
-                            int(edit_bb_ind),
-                            int(edit_bb_group),
-                            int(edit_ct),
-                            int(edit_ot),
+                        supabase.table("resultats").update({
+                            "date": edit_date,
+                            "semaine": int(edit_semaine),
+                            "kuyok": edit_k,
+                            "field": int(edit_field),
+                            "fruit": int(edit_fruit),
+                            "autres": int(edit_autres),
+                            "presence": int(edit_presence),
+                            "taggui": int(edit_taggui),
+                            "bb_ind": int(edit_bb_ind),
+                            "bb_group": int(edit_bb_group),
+                            "ct": int(edit_ct),
+                            "ot": int(edit_ot)
+                        }).eq(
+                            "id",
                             int(selected_id)
-                        ))
+                        ).execute()
 
-                        conn.commit()
-
-                        st.success("""
-                        ✅ Modification enregistrée avec succès
-                        """)
+                        st.success(
+                            "✅ Modification enregistrée"
+                        )
 
                         st.balloons()
+
+                        st.cache_data.clear()
 
                         st.rerun()
 
@@ -789,26 +744,24 @@ elif page == "⚙️ Admin":
                     if not confirm_delete:
 
                         st.error(
-                            "❌ Veuillez confirmer la suppression"
+                            "❌ Veuillez confirmer"
                         )
 
                     else:
 
-                        cursor.execute("""
-                        DELETE FROM resultats
-                        WHERE id=?
-                        """, (
-                            int(delete_id),
-                        ))
+                        supabase.table(
+                            "resultats"
+                        ).delete().eq(
+                            "id",
+                            int(delete_id)
+                        ).execute()
 
-                        conn.commit()
-
-                        st.success(f"""
-                        ✅ Entrée supprimée avec succès !
-
-                        🗑️ {delete_label}
-                        """)
+                        st.success(
+                            "✅ Entrée supprimée"
+                        )
 
                         st.balloons()
+
+                        st.cache_data.clear()
 
                         st.rerun()
